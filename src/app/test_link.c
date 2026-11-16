@@ -190,6 +190,8 @@ static uint32_t state(char *text, uint32_t size)
     put(&o, "receiving", "%d", radio_is_receiving() ? 1 : 0);
     put(&o, "transmitting", "%d", radio_is_transmitting() ? 1 : 0);
     put(&o, "dbm", "%d", radio_signal_dbm());
+    put(&o, "signal", "%u", (unsigned)radio_signal_raw()); // FD6818 0x67 bits 8:0 halved, the last reading
+    put(&o, "noise", "%u", (unsigned)radio_noise());       // FD6818 0x65, the last reading
     put(&o, "lockouts", "%u,%u,%d", (unsigned)scan_skipped_channels.count, (unsigned)scan_skipped_frequencies.count,
         scan_saved_count());
     return (uint32_t)(o.at - text);
