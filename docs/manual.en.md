@@ -508,9 +508,9 @@ Read only: the factory calibration table (oscillator tune, receive level, power 
 - Location: the fixed location of the channel's APRS configuration, or the GPS;
 - Interval, Decay, Compress; for Smart: Slow / Fast Rate, Low / Hi Speed, Turn Angle / Slope / Time.
 - SK1 + 1 switches APRS on / off at any time. Beacons are sent as AFSK (1200 baud) in FM.
-- The APRS configuration (in the CPS) has a "Transmit QSY" tick and its frequency ("Frec TX"): the voice frequency
-  you listen on, not the APRS frequency. With it the beacon's comment begins with e.g. "146.520MHz", which aprs.fi
-  and APRS radios read as the frequency to call you on.
+- "Transmit QSY" (in the APRS configuration, in the CPS): the beacon's comment begins with the channel's voice
+  frequency, its Tx tone and offset, e.g. "146.520MHz T100 +000" (Toff: no tone; lower case on a narrow channel),
+  which aprs.fi and APRS radios read as the frequency to call you on.
 
 ---
 

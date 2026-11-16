@@ -45,6 +45,7 @@
 #include "gps.h"
 #include "sound.h"
 #include "ui.h"
+#include "tones.h"
 #include "aprs.h"
 
 #define DESTINATION        "APOG77"
@@ -239,21 +240,47 @@ static void put_header(const char *call)
     put_char(0xF0, true);
 }
 
-// The CPS's APRS frequency ("Frec TX"), 10 Hz units like a channel; 0: not set
-static uint32_t config_frequency(const codeplug_aprs_config_t *c)
+// The QSY information ("Transmit QSY", flags bit 2; APRS spec aprs.org/info/freqspec.txt, as OpenGD77 sends it):
+// the voice frequency of the channel the station is on, so that others can call it there: "FFF.FFFMHz Tnnn +ooo"
+// first in the comment. Tnnn: the channel's Tx tone (CTCSS in whole Hz, Dnnn: DCS, Toff: none), lower case on a
+// narrow channel; +ooo: the Tx offset in 10 kHz units (left out beyond 9.99 MHz, a cross band split). False: no
+// QSY (not ticked, or no channel)
+static bool qsy_text(char *out, size_t size)
 {
-    return (uint32_t)c->tx_freq[0] | ((uint32_t)c->tx_freq[1] << 8) |
-           ((uint32_t)c->tx_freq[2] << 16) | ((uint32_t)c->tx_freq[3] << 24);
+    codeplug_channel_t channel;
+    char tone[8];
+    int32_t offset;
+    int n;
+
+    if (!(aprs.config.flags & 0x04) || !radio_get_channel(&channel) || (channel.rx_freq == 0) ||
+        (channel.rx_freq >= 100000000UL)) {
+        return false;
+    }
+    if (channel.tx_tone == CODEPLUG_CSS_NONE) {
+        snprintf(tone, sizeof(tone), "Toff");
+    } else if (channel.tx_tone & TONES_DCS) {
+        snprintf(tone, sizeof(tone), "D%03X", (unsigned)(channel.tx_tone & TONES_DCS_CODE));
+    } else {
+        snprintf(tone, sizeof(tone), "T%03u", (unsigned)(channel.tx_tone / 10U));
+    }
+    if (!(channel.flag4 & 0x02)) {
+        tone[0] = (char)(tone[0] - 'A' + 'a'); // narrow
+    }
+    n = snprintf(out, size, "%3u.%03uMHz %s", (unsigned)(channel.rx_freq / 100000UL),
+                 (unsigned)((channel.rx_freq / 100UL) % 1000UL), tone);
+    offset = ((int32_t)channel.tx_freq - (int32_t)channel.rx_freq) / 1000; // 10 Hz to 10 kHz
+    if ((n > 0) && ((size_t)n < size) && (offset >= -999) && (offset <= 999)) {
+        snprintf(out + n, size - (size_t)n, " %c%03ld", (offset < 0) ? '-' : '+',
+                 (long)((offset < 0) ? -offset : offset));
+    }
+    return true;
 }
 
-// The QSY frequency (APRS spec, aprs.org/info/freqspec.txt): "FFF.FFFMHz" in the first 10 characters of the comment,
-// followed by the comment text; aprs.fi reads it as the frequency the station listens on. Set when "Transmit QSY"
-// (flags bit 2) is ticked and the CPS's frequency ("Frec TX", 10 Hz units) is not zero.
 static void put_payload(const char *lat, const char *lon, const char *course_speed)
 {
     const codeplug_aprs_config_t *c = &aprs.config;
-    uint32_t qsy = config_frequency(c);
-    bool has_qsy = (c->flags & 0x04) && (qsy != 0);
+    char qsy[24];
+    bool has_qsy = qsy_text(qsy, sizeof(qsy));
     uint8_t symbol = (uint8_t)(c->icon_index + '!');
     uint8_t table = (c->icon_table == 0) ? '/' : '\\';
     char comment[sizeof(c->comment) + 1];
@@ -283,19 +310,12 @@ static void put_payload(const char *lat, const char *lon, const char *course_spe
         }
     }
     if (has_qsy) {
-        char qsy_text[11];
-        const char *text = comment;
-
-        snprintf(qsy_text, sizeof(qsy_text), "%3u.%03uMHz", (unsigned)(qsy / 100000UL),
-                 (unsigned)((qsy / 100UL) % 1000UL));
-        put_string(qsy_text);
-        if (*text != 0) {
+        put_string(qsy);
+        if (comment[0] != 0) {
             put_char(' ', true);
         }
-        put_string(text);
-    } else {
-        put_string(comment);
     }
+    put_string(comment);
 }
 
 static void put_crc(void)
