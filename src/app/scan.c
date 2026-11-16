@@ -201,3 +201,30 @@ scan_key_t scan_key(scan_t *scan, const ui_event_t *ev)
     scan_stop(scan);
     return SCAN_KEY_STOPPED;
 }
+
+/* Nuisance delete */
+
+scan_skipped_t scan_skipped_channels;
+scan_skipped_t scan_skipped_frequencies;
+
+bool scan_skipped_has(const scan_skipped_t *skipped, uint32_t value)
+{
+    for (int i = 0; i < skipped->count; i++) {
+        if (skipped->item[i] == value) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool scan_skipped_add(scan_skipped_t *skipped, uint32_t value)
+{
+    if (scan_skipped_has(skipped, value)) {
+        return true;
+    }
+    if (skipped->count >= SCAN_SKIPPED_MAX) {
+        return false;
+    }
+    skipped->item[skipped->count++] = value;
+    return true;
+}

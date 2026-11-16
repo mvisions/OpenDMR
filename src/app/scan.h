@@ -46,7 +46,7 @@ typedef enum { SCAN_ANALOG, SCAN_DMR, SCAN_P25 } scan_kind_t;
 typedef enum {
     SCAN_KEY_NONE,    // not the scan's: the screen handles it
     SCAN_KEY_USED,    // done (a release of the key that stopped it, a side key ...)
-    SCAN_KEY_SKIP,    // * on a paused one: leave it out of this scan, then on
+    SCAN_KEY_SKIP,    // * on a paused one: leave it out of the scans (scan_skipped_add()), then on
     SCAN_KEY_STOPPED, // the scan ended: nothing more for this key
 } scan_key_t;
 
@@ -61,6 +61,21 @@ typedef struct {
     bool waiting;  // a DMR / P25 step kept longer for its signal
     uint8_t floor; // DMR / P25: the signal strength of the steps without a signal (0: not known yet)
 } scan_t;
+
+// Nuisance delete: the channels (their numbers) and VFO frequencies skipped with * while a scan stood on them; left
+// out of every scan until they are cleared (the quick menu) or the radio is switched off
+#define SCAN_SKIPPED_MAX 64
+
+typedef struct {
+    uint32_t item[SCAN_SKIPPED_MAX];
+    uint8_t count;
+} scan_skipped_t;
+
+extern scan_skipped_t scan_skipped_channels;
+extern scan_skipped_t scan_skipped_frequencies;
+
+bool scan_skipped_add(scan_skipped_t *skipped, uint32_t value); // false: the list is full
+bool scan_skipped_has(const scan_skipped_t *skipped, uint32_t value);
 
 // The time on a channel or frequency before moving on: the step time, DMR and P25 at least DIGITAL_STEP_MS
 uint32_t scan_dwell_ms(scan_kind_t kind);

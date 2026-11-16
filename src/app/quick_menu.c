@@ -51,6 +51,7 @@
 #include "vfo_screen.h"
 #include "channel_details.h"
 #include "quick_menu.h"
+#include "scan.h"
 
 // Bits of settings.bitfield_options (the main firmware's BIT_x)
 #define BIT_DUAL_WATCH    (1UL << 10) // BIT_DUAL_WATCH
@@ -86,6 +87,7 @@ typedef enum {
     QM_TONE_SCAN,
     QM_SCAN_LOW,  // the VFO's scan limits (vfo_screen.c scan): the RX frequency
     QM_SCAN_HIGH,
+    QM_SCAN_SKIPPED, // nuisance delete (scan.c): how many; OK clears them
 } item_t;
 
 typedef struct {
@@ -96,10 +98,11 @@ typedef struct {
 // The orders of CHANNEL_SCREEN_QUICK_MENU_ITEMS and VFO_SCREEN_QUICK_MENU_ITEMS (DM-32)
 static const uint8_t channel_items[] = {QM_CHANNEL_DETAILS, QM_CHANNEL_TO_VFO, QM_VFO_TO_CHANNEL, QM_FILTER,
                                         QM_DMR_FILTER,      QM_CC_SCAN,        QM_TS_FILTER,      QM_TALKAROUND,
-                                        QM_DISTANCE_SORT,   QM_DUAL_WATCH,     QM_DUAL_ADD};
+                                        QM_DISTANCE_SORT,   QM_DUAL_WATCH,     QM_DUAL_ADD,       QM_SCAN_SKIPPED};
 static const uint8_t vfo_items[] = {QM_CHANNEL_DETAILS, QM_VFO_AB,    QM_SWAP,       QM_RX_TO_TX,  QM_TX_TO_RX,
                                     QM_FILTER,          QM_DMR_FILTER, QM_CC_SCAN,   QM_TS_FILTER, QM_VFO_TO_NEW,
-                                    QM_TONE_SCAN,       QM_DUAL_WATCH, QM_SCAN_LOW,  QM_SCAN_HIGH, QM_DUAL_ADD};
+                                    QM_TONE_SCAN,       QM_DUAL_WATCH, QM_SCAN_LOW,  QM_SCAN_HIGH, QM_DUAL_ADD,
+                                    QM_SCAN_SKIPPED};
 static const menu_t channel_menu = {channel_items, sizeof(channel_items)};
 static const menu_t vfo_menu = {vfo_items, sizeof(vfo_items)};
 
@@ -319,6 +322,12 @@ static void vfo_to_new_channel(void)
 }
 
 // The left key on an item; the menu is left after it
+// The skipped list of this menu's screen: the channels, or the VFO frequencies
+static scan_skipped_t *skipped_list(void)
+{
+    return (menu() == &vfo_menu) ? &scan_skipped_frequencies : &scan_skipped_channels;
+}
+
 static void select_item(item_t item)
 {
     if (((item == QM_VFO_TO_CHANNEL) || (item == QM_VFO_TO_NEW)) && (confirming < 0)) {
@@ -334,6 +343,9 @@ static void select_item(item_t item)
     }
 
     switch (item) {
+        case QM_SCAN_SKIPPED: // nuisance delete: back in the scans
+            skipped_list()->count = 0;
+            break;
         case QM_CHANNEL_DETAILS:
             settings_save_if_changed();
             ui_replace(&channel_details_screen, NULL);
@@ -444,6 +456,7 @@ static const char *format_item(item_t item, char *name, size_t name_size, char *
         [QM_TONE_SCAN] = TEXT_TONE_SCAN,
         [QM_SCAN_LOW] = TEXT_SCAN_LOW,
         [QM_SCAN_HIGH] = TEXT_SCAN_HIGH,
+        [QM_SCAN_SKIPPED] = TEXT_SCAN_SKIPPED_MENU,
     };
     const char *value = NULL;
 
@@ -476,6 +489,14 @@ static const char *format_item(item_t item, char *name, size_t name_size, char *
             break;
         case QM_TS_FILTER:
             value = on_off(settings.dmr_cc_ts_filter & TS_FILTER);
+            break;
+        case QM_SCAN_SKIPPED:
+            if (skipped_list()->count) {
+                snprintf(out, size, "%u", (unsigned)skipped_list()->count);
+                value = out;
+            } else {
+                value = text(TEXT_NONE);
+            }
             break;
         case QM_TALKAROUND:
             value = (talkaround_possible() ? on_off(talkaround) : text(TEXT_N_A));

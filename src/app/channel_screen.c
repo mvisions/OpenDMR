@@ -104,15 +104,13 @@ static int direct_channel = 0;     // a channel number being typed
 static uint32_t squelch_shown_until;
 
 /* The scan (scan.c; uiChannelMode.c scanSearchForNextChannel()): the zone's channels in turn, skipping the ones
-   marked (zone skip, or all-channels skip in the all channels zone) and the ones skipped this time (*) */
+   marked (zone skip, or all-channels skip in the all channels zone) and the ones skipped with * (scan_skipped_channels,
+   until cleared in the quick menu or power off) */
 
-#define SCAN_NUISANCE_MAX   16
 #define FLAG4_ZONE_SKIP     0x20
 #define FLAG4_ALL_SKIP      0x10
 
 static scan_t scan = {.swallow_key = UI_KEY_COUNT};
-static int scan_nuisance[SCAN_NUISANCE_MAX];
-static int scan_nuisance_count;
 
 static int zone_size(void)
 {
@@ -306,12 +304,7 @@ static bool scan_skipped(int at)
         (c.flag4 & ((zone.index >= 0) ? FLAG4_ZONE_SKIP : FLAG4_ALL_SKIP))) {
         return true;
     }
-    for (int i = 0; i < scan_nuisance_count; i++) {
-        if (scan_nuisance[i] == number) {
-            return true;
-        }
-    }
-    return false;
+    return scan_skipped_has(&scan_skipped_channels, (uint32_t)number);
 }
 
 // The next channel to scan, -1: none left (all skipped)
@@ -338,7 +331,6 @@ static void scan_begin(int direction)
         return;
     }
     scan.direction = (int8_t)direction;
-    scan_nuisance_count = 0;
     at = scan_next();
     if (at < 0) {
         ui_key_beep(SOUND_ERROR);
@@ -617,9 +609,8 @@ static bool handle_key(const ui_event_t *ev)
 
     switch (scan_key(&scan, ev)) {
         case SCAN_KEY_SKIP:
-            if (scan_nuisance_count < SCAN_NUISANCE_MAX) {
-                scan_nuisance[scan_nuisance_count++] = zone_channel(position);
-            }
+            ui_key_beep(scan_skipped_add(&scan_skipped_channels, (uint32_t)zone_channel(position)) ? SOUND_ACK
+                                                                                                  : SOUND_ERROR);
             // fall through
         case SCAN_KEY_USED:
         case SCAN_KEY_STOPPED:
@@ -781,6 +772,12 @@ static void draw(void)
     status.signal_bars = (int8_t)((meter.s_units * ICONS_SIGNAL_BARS) / 9);
 
     format_names(zone_text, sizeof(zone_text), name, sizeof(name));
+    if (scan.active && scan_skipped_channels.count) { // nuisance delete: how many are left out
+        size_t n = strlen(zone_text);
+
+        snprintf(&zone_text[n], sizeof(zone_text) - n, "  %s %u", text(TEXT_SCAN_SKIPPED),
+                 (unsigned)scan_skipped_channels.count);
+    }
     if (direct_channel > 0) {
         snprintf(name, sizeof(name), "-> %d", direct_channel);
     }

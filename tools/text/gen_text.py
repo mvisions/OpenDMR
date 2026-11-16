@@ -98,6 +98,8 @@ EXTRA = [
     ("key_tx_up", "Change RX freq", "改接收频率", "Cambiar freq RX"),
     ("key_tx_down", "Change TX freq", "改发射频率", "Cambiar freq TX"),
     ("key_held", "long", "长按", "larga"),  # after a key combination held: "SK2+Right long"
+    ("scan_skipped", "Skipped", "跳过", "Saltados"),  # nuisance delete (scan.c): on the scan screens
+    ("scan_skipped_menu", "Scan skipped", "扫描跳过", "Saltados scan"),  # the quick menu row (OK: cleared)
     ("key_scan_up", "Scan up", "向上扫描", "Scan +"),
     ("key_scan_down", "Scan down", "向下扫描", "Scan -"),
     ("key_aprs_toggle", "APRS on/off", "APRS 开/关", "APRS on/off"),

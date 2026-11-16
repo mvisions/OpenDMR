@@ -140,11 +140,7 @@ static bool dirty = false;
 
 static bool editing_tx = false; // the TX frequency was stepped last: shown large, digits enter it
 
-#define SCAN_NUISANCE_MAX 16
-
 static scan_t scan = {.swallow_key = UI_KEY_COUNT};
-static uint32_t scan_nuisance[SCAN_NUISANCE_MAX];
-static int scan_nuisance_count;
 static digit_entry_t entry = {
     .max = FREQ_DIGITS, .dot_after = FREQ_DOT_AFTER, .zero_fill = true, .ok_on_release = true};
 static uint8_t held = 0; // UI_MODIFIER_x of the last key or rotary event
@@ -428,14 +424,10 @@ static uint32_t scan_dwell(void)
     return scan_dwell_ms(scan_kind());
 }
 
+// Skipped with * (nuisance delete, scan_skipped_frequencies): until cleared in the quick menu or power off
 static bool scan_skipped(uint32_t frequency)
 {
-    for (int i = 0; i < scan_nuisance_count; i++) {
-        if (scan_nuisance[i] == frequency) {
-            return true;
-        }
-    }
-    return false;
+    return scan_skipped_has(&scan_skipped_frequencies, frequency);
 }
 
 // One VFO step on in the scan direction, round within the limits (skipped frequencies left out); 0: none left
@@ -448,7 +440,7 @@ static uint32_t scan_next(void)
     uint32_t f = v->rx_freq;
 
     scan_range(&low, &high);
-    for (int i = 0; i <= SCAN_NUISANCE_MAX; i++) {
+    for (int i = 0; i <= SCAN_SKIPPED_MAX; i++) {
         if (scan.direction > 0) {
             f = ((f + step) > high) ? low : (f + step);
         } else {
@@ -474,7 +466,6 @@ static void scan_begin(int direction)
     }
     digit_entry_stop(&entry);
     editing_tx = false;
-    scan_nuisance_count = 0;
     if ((v->rx_freq < low) || (v->rx_freq > high)) {
         v->rx_freq = (direction > 0) ? low : high; // into the range
         dirty = true;
@@ -768,9 +759,7 @@ static bool handle_event(const ui_event_t *ev)
             held = ev->modifiers;
             switch (scan_key(&scan, ev)) {
                 case SCAN_KEY_SKIP:
-                    if (scan_nuisance_count < SCAN_NUISANCE_MAX) {
-                        scan_nuisance[scan_nuisance_count++] = vfo()->rx_freq;
-                    }
+                    ui_key_beep(scan_skipped_add(&scan_skipped_frequencies, vfo()->rx_freq) ? SOUND_ACK : SOUND_ERROR);
                     // fall through
                 case SCAN_KEY_USED:
                 case SCAN_KEY_STOPPED:
@@ -976,6 +965,10 @@ static void draw(void)
                  (unsigned long)((low % 100000) / 100), (unsigned long)(high / 100000),
                  (unsigned long)((high % 100000) / 100));
         draw_info_line(TX_Y + 10, text(TEXT_SCAN), buffer);
+        if (scan_skipped_frequencies.count) { // nuisance delete: how many are left out
+            snprintf(buffer, sizeof(buffer), "%u", (unsigned)scan_skipped_frequencies.count);
+            draw_info_line(TX_Y + 34, text(TEXT_SCAN_SKIPPED), buffer);
+        }
     } else {
         draw_frequency(TX_Y, true, tx, step);
     }

@@ -255,7 +255,11 @@ While transmitting:
   in All Channels those with All Skip); in the VFO between the scan limits (without limits: the whole band). The
   status bar shows the scan icon.
 - While scanning: **▲** goes on at once; **◀** reverses; when it has stopped on a signal, **\*** skips that channel /
-  frequency as a nuisance (for this scan); **PTT** stops the scan and transmits; **any other key** stops it.
+  frequency as a nuisance (a beep; the scan shows how many are skipped); **PTT** stops the scan and transmits;
+  **any other key** stops it.
+- Skipped channels and frequencies stay out of every scan until the radio is switched off (up to 64 each), or until
+  they are cleared: quick menu → **Scan skipped** (it shows how many), OK. The channels' Zone Skip / All Skip in the
+  codeplug are not changed.
 - Radio options: Scan delay (how long it stays), Scan dwell (the time on each channel / frequency), Scan mode (Hold /
   Pause / Stop), Scan On Boot.
 - DMR and P25 channels take at least 50 ms each; where the signal strength rises over the noise, the scan waits up to
