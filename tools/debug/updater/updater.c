@@ -20,7 +20,7 @@
  *   'T' x(2) y(2) w(2) h(2) colour(2) bits -> 'T' once drawn: a 1 bit picture, the PC's text (fw_update.py)
  *   'S' divisor(2)                        -> 'S' (still at the old speed), then the UART at 84 MHz / 16 / divisor:
  *                                            'H' -> "UPD1" then 'Y' -> 'Y' must follow at the new speed, each
- *                                            within about 2 s, else the old divisor is back (a speed the cable
+ *                                            within about 0.4 s, else the old divisor is back (a speed the cable
  *                                            can't carry: over the mic jack about 375000 is the most)
  *   'B'                                   -> 'B', then the restart
  * addr: a program flash address, 4 KB aligned, in the firmware area [0xC000, 0xDE000) only (the bootloader below
@@ -76,6 +76,7 @@
 #define PAGE             256
 #define BUSY_POLLS       2000000  // flash status reads before giving up (a sector erase takes up to 0.4 s)
 #define BYTE_POLLS       30000000 // UART polls before a request cut short is dropped (about 2 s)
+#define SPEED_POLLS      6000000  // 'H' and 'Y' at a new speed: about 0.4 s (a PC trying the next one waits little)
 
 #define ERR_CRC     1 // the sector came in damaged
 #define ERR_ADDRESS 2
@@ -107,15 +108,20 @@ static void uart_put_word(uint32_t v)
     uart_put(v);
 }
 
-// A byte, or -1 after BYTE_POLLS empty polls (wait: no limit)
-static int uart_get(bool wait)
+// A byte, or -1 after polls empty polls (wait: no limit)
+static int uart_get_within(bool wait, uint32_t polls)
 {
-    for (uint32_t n = 0; wait || (n < BYTE_POLLS); n++) {
+    for (uint32_t n = 0; wait || (n < polls); n++) {
         if (UART0(UART_LSR) & 0x01) {
             return UART0(UART_RBR) & 0xFF;
         }
     }
     return -1;
+}
+
+static int uart_get(bool wait)
+{
+    return uart_get_within(wait, BYTE_POLLS);
 }
 
 static bool uart_get_word(uint32_t *v)
@@ -488,9 +494,9 @@ void __attribute__((section(".text.entry"), noreturn)) updater_main(void)
                 uart_put('S');
                 uart_set_divisor((hi << 8) | lo);
                 bool both_ways = false; // the PC sends 'Y' only after a sound "UPD1"
-                if (uart_get(false) == 'H') {
+                if (uart_get_within(false, SPEED_POLLS) == 'H') {
                     hello();
-                    both_ways = (uart_get(false) == 'Y');
+                    both_ways = (uart_get_within(false, SPEED_POLLS) == 'Y');
                 }
                 if (both_ways) {
                     uart_put('Y');

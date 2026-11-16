@@ -41,7 +41,7 @@ ERRORS = {1: 'the sector came in damaged', 2: 'address outside the firmware area
 UART_CLOCK = 84000000 // 16  # the radio's UART: 84 MHz APB, baud = UART_CLOCK / divisor
 FAST_DIVISORS = (7, 14, 21)  # 750000, 375000, 250000 baud: the fastest that answers. A CH340 loses a reply byte to
                              # the PC now and then at 375000 and up: a write checks its sector then (write_sector())
-SWITCH_SETTLE_S = 0.5  # after a speed change, before talking (the radio waits about 2 s for 'H')
+SWITCH_SETTLE_S = 0.05  # after a speed change, before talking (the radio waits about 0.4 s for 'H')
 PROBE_DIVISORS = (7, 14, 16, 21)  # where a radio left in the update by an older run may be: 750000 ... 250000
 UPDATER_AREA = 0x44400  # updater/updater.ld: the update area, which the firmware's loader gives the program
 
@@ -158,19 +158,22 @@ class Updater:
                 raise RuntimeError('bad reply to S')
             time.sleep(0.02)
             self.p.baudrate = UART_CLOCK // divisor
-            time.sleep(SWITCH_SETTLE_S)  # a bridge between this port and the cable (com0com) follows the change late
+            time.sleep(SWITCH_SETTLE_S)
             self.p.reset_input_buffer()
             self.p.write(b'H')
-            if self.wait_for(b'UPD1', 1.0) is not None:
+            if self.wait_for(b'UPD1', 0.3) is not None:
                 self.p.write(b'Y')  # both ways sound: the radio keeps the speed
-                if self.wait_for(b'Y', 0.5) is not None:
+                if self.wait_for(b'Y', 0.3) is not None:
                     remember_speed(port_name, divisor)
                     return
-            self.p.baudrate = old  # the radio goes back by itself
-            time.sleep(4.5)  # up to two waits of about 2 s
-            self.p.reset_input_buffer()
-            self.p.write(b'H')
-            if self.wait_for(b'UPD1', 1.0) is None:
+            self.p.baudrate = old  # the radio goes back by itself: after 0.4 s at most (an older update program: 2 s)
+            for wait in (0.5, 2.0, 2.0):
+                time.sleep(wait)
+                self.p.reset_input_buffer()
+                self.p.write(b'H')
+                if self.wait_for(b'UPD1', 0.3) is not None:
+                    break
+            else:
                 raise RuntimeError('lost the radio after trying %d baud' % (UART_CLOCK // divisor))
 
     def sector_crc(self, address):

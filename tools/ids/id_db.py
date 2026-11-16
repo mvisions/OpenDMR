@@ -60,7 +60,7 @@ BLOCK = 0x1000
 CHUNK_WRITE = 1024               # bytes of an 'X' 2 (the radio's request buffer: 1536)
 UART_CLOCK = 84000000 // 16      # the radio's UART: baud = UART_CLOCK / divisor
 SPEED_DIVISORS = (7, 14, 21)     # 750000, 375000, 250000 baud (12 MHz / n for the CH340 too)
-SPEED_BACK_S = 2.5               # an unconfirmed speed: the radio is back at 115200 after 2 s
+SPEED_BACK_S = 0.5               # an unconfirmed speed: the radio is back at 115200 after 0.4 s
 CHUNK = 16
 SUFFIX_BITS = [0, 5, 10, 15, 19]
 FIELDS = ('delta', 'call', 'name', 'place', 'other')
@@ -373,11 +373,14 @@ def write(port_name, path):
                 return 115200  # an older firmware: as fast as it goes
             time.sleep(0.02)
             port.baudrate = baud
-            time.sleep(0.3)  # a com0com bridge follows the change late
+            time.sleep(0.05)
             if request(b'DY', b'DY') and all(sector_crc(HEADER_AT) is not None for _ in range(4)):
                 return baud
-            port.baudrate = 115200
-            time.sleep(SPEED_BACK_S)
+            port.baudrate = 115200  # the radio goes back by itself: after 0.4 s (a firmware before: 2 s)
+            for wait in (SPEED_BACK_S, 2.0):
+                time.sleep(wait)
+                if sector_crc(HEADER_AT) is not None:
+                    break
         return 115200
 
     def put_sector(address, sector):

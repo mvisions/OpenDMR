@@ -95,7 +95,7 @@ static volatile bool update_asked = false;
 
 // 'D' 'S': a faster speed (tools/ids/id_db.py), kept once the PC's 'D' 'Y' has come at it; back to 115200 when that
 // doesn't come, or when the link has been quiet a while (the CPS starts at 115200)
-#define SPEED_CONFIRM_MS 2000
+#define SPEED_CONFIRM_MS 400 // a speed not confirmed: back to 115200 soon, a PC trying the next one waits little
 #define SPEED_IDLE_MS    5000
 #define SPEED_MIN_DIVISOR 4 // 1.3 Mbaud
 static uint32_t speed_asked = 0; // the divisor to go to after this reply
