@@ -53,6 +53,7 @@ int vfo_screen_current(void);
 codeplug_channel_t *vfo_screen_vfo(int vfo);
 void vfo_screen_save(int vfo); // after a change from another screen: written to the codeplug at once
 void vfo_screen_reload(void);  // the codeplug changed under them (codeplug_set_all_power()): read again
+int vfo_screen_scanning(void);    // 0 no scan, 1 scanning, 2 standing on a signal (the test interface)
 void vfo_screen_tone_scan(int type); // the quick menu: the receive tone scanned (0 all, 1 CTCSS, 2 DCS, 3 iDCS)
 
 #endif

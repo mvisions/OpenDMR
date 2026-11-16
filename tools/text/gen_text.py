@@ -102,7 +102,7 @@ EXTRA = [
     ("scan_lockouts", "Scan lockouts", "扫描屏蔽", "Bloqueos scan"),  # lockouts.c: the list (main menu)
     ("scan_lockout", "Scan lockout", "扫描屏蔽", "Bloqueo scan"),  # the quick menu: this channel / frequency
     ("lockout_temp", "Temp", "临时", "Temporal"),  # until power off (nuisance delete)
-    ("lockout_saved", "Saved", "永久", "Fijo"),  # a VFO frequency for good
+    ("lockout_saved", "Permanent", "永久", "Fijo"),  # for good (a VFO frequency in the list)
     ("unlock", "Unlock", "解除", "Desbloq."),  # lockouts.c: the left key
     ("unlock_all", "Unlock all", "全部解除", "Desbloquear todo"),  # the VFO frequencies (OK: cleared)
     ("key_scan_up", "Scan up", "向上扫描", "Scan +"),

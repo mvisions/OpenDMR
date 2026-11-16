@@ -30,10 +30,12 @@
 #include <stdbool.h>
 
 // What the scans leave out (lockouts.c). The main menu: all of them, unlocked one by one (ui_push(&pick_list_screen,
-// &lockouts_list)). The quick menu: the current channel or VFO frequency, on (locked out for good) or off.
+// &lockouts_list)). The quick menu: the current channel or VFO frequency, off, temp or permanent.
 extern const ui_pick_list_t lockouts_list;
 
-bool lockouts_current_locked(void);
-bool lockouts_set_current(bool on); // false: not done (the list full, a write failed)
+typedef enum { LOCKOUT_OFF, LOCKOUT_TEMP, LOCKOUT_PERMANENT } lockout_t; // temp: until power off
+
+lockout_t lockouts_current(void);
+bool lockouts_set_current(lockout_t state); // false: not done (the list full, a write failed)
 
 #endif

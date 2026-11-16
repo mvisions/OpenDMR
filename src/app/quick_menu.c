@@ -90,7 +90,7 @@ typedef enum {
     QM_TONE_SCAN,
     QM_SCAN_LOW,  // the VFO's scan limits (vfo_screen.c scan): the RX frequency
     QM_SCAN_HIGH,
-    QM_LOCKOUT,      // the channel / VFO frequency locked out of the scans (lockouts.c): on / off
+    QM_LOCKOUT,      // the channel / VFO frequency locked out of the scans (lockouts.c): off / temp / permanent
 } item_t;
 
 typedef struct {
@@ -233,11 +233,14 @@ static void change(item_t item, int direction)
             settings.dmr_cc_ts_filter = (uint8_t)(on ? (settings.dmr_cc_ts_filter | TS_FILTER)
                                                      : (settings.dmr_cc_ts_filter & ~TS_FILTER));
             break;
-        case QM_LOCKOUT: // at once: in the codeplug or the saved list, not in the settings
-            if (on != lockouts_current_locked()) {
-                ui_key_beep(lockouts_set_current(on) ? SOUND_KEY : SOUND_ERROR);
+        case QM_LOCKOUT: { // off, temp, permanent; at once (the codeplug, the saved list), not in the settings
+            int state = (int)lockouts_current() + direction;
+
+            if ((state >= LOCKOUT_OFF) && (state <= LOCKOUT_PERMANENT)) {
+                ui_key_beep(lockouts_set_current((lockout_t)state) ? SOUND_KEY : SOUND_ERROR);
             }
             return;
+        }
         case QM_TALKAROUND:
             talkaround = (on && talkaround_possible());
             return;
@@ -507,7 +510,9 @@ static const char *format_item(item_t item, char *name, size_t name_size, char *
             value = on_off(settings.dmr_cc_ts_filter & TS_FILTER);
             break;
         case QM_LOCKOUT:
-            value = on_off(lockouts_current_locked());
+            value = (lockouts_current() == LOCKOUT_TEMP)        ? text(TEXT_LOCKOUT_TEMP)
+                    : (lockouts_current() == LOCKOUT_PERMANENT) ? text(TEXT_LOCKOUT_SAVED)
+                                                                : text(TEXT_OFF);
             break;
         case QM_TALKAROUND:
             value = (talkaround_possible() ? on_off(talkaround) : text(TEXT_N_A));
@@ -595,3 +600,25 @@ static const ui_screen_t quick_menu_screen = {
     .handle = handle,
     .draw = draw,
 };
+
+bool quick_menu_describe(char *out, size_t size)
+{
+    char name[VALUE_SIZE];
+    char value[VALUE_SIZE];
+
+    if (ui_top_screen() != &quick_menu_screen) {
+        return false;
+    }
+
+    const menu_t *m = menu();
+    int32_t selected = *ui_state();
+    const char *shown = NULL;
+
+    name[0] = '\0';
+    if ((selected >= 0) && (selected < m->count)) {
+        shown = format_item((item_t)m->items[selected], name, sizeof(name), value, sizeof(value));
+    }
+    snprintf(out, size, "title=%s\nsel=%d\ncount=%d\nrow=%s\nvalue=%s\n", shown_vfo ? "VFO quick menu" : "Channel quick menu",
+             (int)selected, (int)m->count, name, shown ? shown : "");
+    return true;
+}

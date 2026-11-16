@@ -38,5 +38,7 @@ void quick_menu_open_vfo(void);
 
 // Talkaround of the channel screen (not kept over power off, as the main firmware's uiDataGlobal.talkaround)
 bool quick_menu_talkaround(void);
+// The quick menu on top as "name=value" lines (the test interface, test_link.c); false: another screen on top
+bool quick_menu_describe(char *out, size_t size);
 
 #endif

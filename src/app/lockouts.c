@@ -33,7 +33,7 @@
  *   All skip   a channel with All Skip (the all channels zone)
  * The menu key on a row unlocks it (back in the scans), the last row unlocks them all.
  *
- * The quick menu's "Scan lockout": the current channel or VFO frequency only, on (locked out for good) or off.
+ * The quick menu's "Scan lockout": the current channel or VFO frequency only, off, temp or permanent.
  */
 
 #include <stdio.h>
@@ -84,46 +84,61 @@ static void temp_remove(scan_skipped_t *skipped, uint32_t value)
     }
 }
 
-bool lockouts_current_locked(void)
+static void saved_remove(uint32_t f)
+{
+    for (int i = scan_saved_count() - 1; i >= 0; i--) {
+        if (scan_saved_frequency(i) == f) {
+            scan_saved_remove(i);
+        }
+    }
+}
+
+lockout_t lockouts_current(void)
 {
     if (vfo_screen_is_home()) {
         uint32_t f = vfo_screen_vfo(vfo_screen_current())->rx_freq;
 
-        return scan_saved_has(f) || scan_skipped_has(&scan_skipped_frequencies, f);
+        return scan_saved_has(f) ? LOCKOUT_PERMANENT
+                                 : (scan_skipped_has(&scan_skipped_frequencies, f) ? LOCKOUT_TEMP : LOCKOUT_OFF);
     }
 
     int number = channel_screen_channel;
     uint8_t flags = 0;
 
-    return (channel_flags(number, &flags) && (flags & FLAG4_SKIPS)) ||
-           scan_skipped_has(&scan_skipped_channels, (uint32_t)number);
+    if (channel_flags(number, &flags) && (flags & FLAG4_SKIPS)) {
+        return LOCKOUT_PERMANENT;
+    }
+    return scan_skipped_has(&scan_skipped_channels, (uint32_t)number) ? LOCKOUT_TEMP : LOCKOUT_OFF;
 }
 
-bool lockouts_set_current(bool on)
+bool lockouts_set_current(lockout_t state)
 {
     if (vfo_screen_is_home()) {
         uint32_t f = vfo_screen_vfo(vfo_screen_current())->rx_freq;
 
-        if (on) {
-            return scan_saved_add(f);
+        // one kind at a time: the other one taken off
+        if (state != LOCKOUT_TEMP) {
+            temp_remove(&scan_skipped_frequencies, f);
         }
-        temp_remove(&scan_skipped_frequencies, f);
-        for (int i = scan_saved_count() - 1; i >= 0; i--) {
-            if (scan_saved_frequency(i) == f) {
-                scan_saved_remove(i);
-            }
+        if (state != LOCKOUT_PERMANENT) {
+            saved_remove(f);
         }
-        return true;
+        return (state == LOCKOUT_TEMP)        ? scan_skipped_add(&scan_skipped_frequencies, f)
+               : (state == LOCKOUT_PERMANENT) ? scan_saved_add(f)
+                                              : true;
     }
 
     int number = channel_screen_channel;
 
-    if (on) {
-        return channel_screen_lock_out(number);
+    if (state != LOCKOUT_TEMP) {
+        temp_remove(&scan_skipped_channels, (uint32_t)number);
     }
-    temp_remove(&scan_skipped_channels, (uint32_t)number);
-    channel_unflag(number);
-    return true;
+    if (state != LOCKOUT_PERMANENT) {
+        channel_unflag(number);
+    }
+    return (state == LOCKOUT_TEMP)        ? scan_skipped_add(&scan_skipped_channels, (uint32_t)number)
+           : (state == LOCKOUT_PERMANENT) ? channel_screen_lock_out(number)
+                                          : true;
 }
 
 /* The list (the main menu) */

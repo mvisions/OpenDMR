@@ -41,5 +41,6 @@ codeplug_channel_t *channel_screen_edit(void);
 
 // A channel locked out of the scans for good: its Zone Skip, or All Skip in the all channels zone (scan lockouts)
 bool channel_screen_lock_out(int number);
+int channel_screen_scanning(void); // 0 no scan, 1 scanning, 2 standing on a signal (the test interface)
 
 #endif

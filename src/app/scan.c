@@ -123,9 +123,15 @@ void scan_start(scan_t *scan, uint32_t dwell_ms, int direction)
     scan->swallow_key = UI_KEY_COUNT;
     scan->floor = 0;
     scan->star_held = false;
+    scan->move_now = false;
     scan_moved(scan, dwell_ms);
     radio_set_scanning(true);
     ui_timer_start(SCAN_TICK_MS);
+}
+
+bool scan_on_signal(const scan_t *scan)
+{
+    return scan->active && (scan->state != STATE_SCANNING);
 }
 
 void scan_stop(scan_t *scan)
@@ -144,6 +150,11 @@ bool scan_tick(scan_t *scan, scan_kind_t kind)
 
     if (!scan->active) {
         return false;
+    }
+    if (scan->move_now) { // locked out with *: away from its signal now
+        scan->move_now = false;
+        scan->state = STATE_SCANNING;
+        return true;
     }
     if (digital && (scan->state == STATE_SCANNING)) {
         signal_check(scan);
@@ -181,7 +192,7 @@ scan_key_t scan_key(scan_t *scan, const ui_event_t *ev)
 
             scan->star_held = false;
             scan->swallow_key = (held ? UI_KEY_STAR : UI_KEY_COUNT); // the release after a long press
-            scan->due_ms = systime_get_ms();
+            scan->move_now = true;
             return (held ? SCAN_KEY_SKIP_SAVED : SCAN_KEY_SKIP);
         }
         return SCAN_KEY_USED;

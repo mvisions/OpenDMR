@@ -424,6 +424,11 @@ static uint32_t scan_dwell(void)
     return scan_dwell_ms(scan_kind());
 }
 
+int vfo_screen_scanning(void)
+{
+    return scan_on_signal(&scan) ? 2 : (scan.active ? 1 : 0);
+}
+
 // Skipped with * (nuisance delete, scan_skipped_frequencies): until cleared in the quick menu or power off
 static bool scan_skipped(uint32_t frequency)
 {

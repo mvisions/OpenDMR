@@ -62,6 +62,7 @@ typedef struct {
     bool waiting;  // a DMR / P25 step kept longer for its signal
     uint8_t floor; // DMR / P25: the signal strength of the steps without a signal (0: not known yet)
     bool star_held; // * pressed on a paused one: its release (short) or its long press decides; it stays there
+    bool move_now;  // locked out with *: on at once, whatever the signal does (Hold would keep it there)
 } scan_t;
 
 // Nuisance delete: the channels (their numbers) and VFO frequencies skipped with * while a scan stood on them; left
@@ -95,6 +96,8 @@ uint32_t scan_dwell_ms(scan_kind_t kind);
 // The screen is on the first one; starts the screen's timer. direction: 1 up, -1 down
 void scan_start(scan_t *scan, uint32_t dwell_ms, int direction);
 void scan_stop(scan_t *scan);
+// Standing on a signal (paused, or waiting for its audio): * there locks it out
+bool scan_on_signal(const scan_t *scan);
 // true: time to move on (the screen steps, then scan_moved()); scan->active false: it stopped (stop mode)
 bool scan_tick(scan_t *scan, scan_kind_t kind);
 void scan_moved(scan_t *scan, uint32_t dwell_ms);

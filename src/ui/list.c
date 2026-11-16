@@ -560,3 +560,42 @@ const ui_screen_t not_yet_screen = {
     .handle = not_yet_handle,
     .draw = not_yet_draw,
 };
+
+// The list or pick list on top, as lines for the test interface (app/test_link.c): its title, the selected row, the
+// rows, the row's name and value. false: another screen on top
+bool ui_list_describe(char *out, size_t size)
+{
+    int32_t selected = *ui_state();
+    char name[PICK_NAME_SIZE];
+    char value[PICK_NAME_SIZE];
+    const char *shown = NULL;
+
+    name[0] = '\0';
+    value[0] = '\0';
+    if (ui_top_screen() == &list_screen) {
+        const ui_list_t *l = (const ui_list_t *)ui_arg();
+
+        if ((selected >= 0) && (selected < l->count)) {
+            snprintf(name, sizeof(name), "%s", text(l->items[selected].label));
+            shown = format_value(&l->items[selected], value, sizeof(value));
+        }
+        snprintf(out, size, "title=%s\nsel=%d\ncount=%d\nrow=%s\nvalue=%s\n", text(l->title), (int)selected,
+                 (int)l->count, name, shown ? shown : "");
+        return true;
+    }
+    if (ui_top_screen() == &pick_list_screen) {
+        const ui_pick_list_t *p = (const ui_pick_list_t *)ui_arg();
+        int count = p->count();
+
+        if ((selected >= 0) && (selected < count)) {
+            p->name(selected, name, sizeof(name));
+            if (p->value) {
+                p->value(selected, value, sizeof(value));
+            }
+        }
+        snprintf(out, size, "title=%s\nsel=%d\ncount=%d\nrow=%s\nvalue=%s\n", text(p->title), (int)selected, count,
+                 name, value);
+        return true;
+    }
+    return false;
+}

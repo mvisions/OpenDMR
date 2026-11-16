@@ -33,5 +33,7 @@
 
 // Handles a 'D' request of the cable link (cable_link.c); returns the reply length
 uint32_t debug_handle_command(volatile uint8_t *request, volatile uint8_t *reply, uint32_t reply_size);
+// Commands of the app, tried for the ones not here (app/test_link.c): the reply length, 0: not one of them
+extern uint32_t (*debug_app_command)(volatile uint8_t *request, volatile uint8_t *reply, uint32_t reply_size);
 
 #endif

@@ -615,6 +615,11 @@ static bool skip_for_good(int number)
     return codeplug_write_channel(number, &c);
 }
 
+int channel_screen_scanning(void)
+{
+    return scan_on_signal(&scan) ? 2 : (scan.active ? 1 : 0);
+}
+
 bool channel_screen_lock_out(int number)
 {
     return skip_for_good(number);

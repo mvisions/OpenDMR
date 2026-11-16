@@ -118,6 +118,8 @@ typedef struct {
 
 extern const ui_screen_t list_screen;      // arg: the ui_list_t
 extern const ui_screen_t pick_list_screen; // arg: the ui_pick_list_t
+// The list or pick list on top as "name=value" lines (the test interface, app/test_link.c); false: another screen
+bool ui_list_describe(char *out, size_t size);
 // Opens an item as the left key on it does (a screen or a list)
 void ui_list_open_item(const ui_item_t *item);
 

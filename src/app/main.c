@@ -71,6 +71,8 @@
 #include "extra_options.h"
 #include "pin_screen.h"
 #include "lock_screen.h"
+#include "debug.h"
+#include "test_link.h"
 
 volatile unsigned long freertos_assert_line = 0;
 
@@ -117,6 +119,7 @@ int main(void)
     systick_init(configTICK_RATE_HZ);
     systime_init();
     hotspot_init();
+    debug_app_command = test_link_command; // the test interface (tools/debug/radio.py)
     cable_link_init();
     input_start();
     radio_start();

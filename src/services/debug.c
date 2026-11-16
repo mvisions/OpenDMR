@@ -51,6 +51,8 @@
 
 static uint8_t font_sector[FLASH_SECTOR_SIZE]; // the Chinese font sector being uploaded
 
+uint32_t (*debug_app_command)(volatile uint8_t *request, volatile uint8_t *reply, uint32_t reply_size) = NULL;
+
 static uint32_t get_word(volatile uint8_t *p)
 {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
@@ -175,10 +177,15 @@ uint32_t debug_handle_command(volatile uint8_t *request, volatile uint8_t *reply
             }
         } break;
 
-        default:
+        default: {
+            uint32_t n = debug_app_command ? debug_app_command(request, reply, reply_size) : 0;
+
+            if (n) {
+                return n; // the app's (the test interface: 'k', 'q')
+            }
             reply[0] = '-';
             reply_length = 1;
-            break;
+        } break;
     }
 
     return reply_length;
