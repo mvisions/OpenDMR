@@ -427,7 +427,7 @@ static uint32_t scan_dwell(void)
 // Skipped with * (nuisance delete, scan_skipped_frequencies): until cleared in the quick menu or power off
 static bool scan_skipped(uint32_t frequency)
 {
-    return scan_skipped_has(&scan_skipped_frequencies, frequency);
+    return scan_skipped_has(&scan_skipped_frequencies, frequency) || scan_saved_has(frequency);
 }
 
 // One VFO step on in the scan direction, round within the limits (skipped frequencies left out); 0: none left
@@ -759,7 +759,11 @@ static bool handle_event(const ui_event_t *ev)
             held = ev->modifiers;
             switch (scan_key(&scan, ev)) {
                 case SCAN_KEY_SKIP:
-                    ui_key_beep(scan_skipped_add(&scan_skipped_frequencies, vfo()->rx_freq) ? SOUND_ACK : SOUND_ERROR);
+                    ui_key_beep(scan_skipped_add(&scan_skipped_frequencies, vfo()->rx_freq) ? SOUND_KEY : SOUND_ERROR);
+                    (void)keymap_action(ev, KEYMAP_SCREEN_VFO);
+                    return true;
+                case SCAN_KEY_SKIP_SAVED:
+                    ui_key_beep(scan_saved_add(vfo()->rx_freq) ? SOUND_ACK : SOUND_ERROR);
                     // fall through
                 case SCAN_KEY_USED:
                 case SCAN_KEY_STOPPED:
@@ -965,8 +969,8 @@ static void draw(void)
                  (unsigned long)((low % 100000) / 100), (unsigned long)(high / 100000),
                  (unsigned long)((high % 100000) / 100));
         draw_info_line(TX_Y + 10, text(TEXT_SCAN), buffer);
-        if (scan_skipped_frequencies.count) { // nuisance delete: how many are left out
-            snprintf(buffer, sizeof(buffer), "%u", (unsigned)scan_skipped_frequencies.count);
+        if (scan_skipped_frequencies.count + scan_saved_count()) { // nuisance delete: how many are left out
+            snprintf(buffer, sizeof(buffer), "%u", (unsigned)(scan_skipped_frequencies.count + scan_saved_count()));
             draw_info_line(TX_Y + 34, text(TEXT_SCAN_SKIPPED), buffer);
         }
     } else {

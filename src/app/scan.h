@@ -46,7 +46,8 @@ typedef enum { SCAN_ANALOG, SCAN_DMR, SCAN_P25 } scan_kind_t;
 typedef enum {
     SCAN_KEY_NONE,    // not the scan's: the screen handles it
     SCAN_KEY_USED,    // done (a release of the key that stopped it, a side key ...)
-    SCAN_KEY_SKIP,    // * on a paused one: leave it out of the scans (scan_skipped_add()), then on
+    SCAN_KEY_SKIP,       // * (short) on a paused one: left out until power off (scan_skipped_add()), then on
+    SCAN_KEY_SKIP_SAVED, // * held on a paused one: left out for good (the channel's skip flag, scan_saved_add())
     SCAN_KEY_STOPPED, // the scan ended: nothing more for this key
 } scan_key_t;
 
@@ -60,6 +61,7 @@ typedef struct {
     uint32_t dwell_ms;
     bool waiting;  // a DMR / P25 step kept longer for its signal
     uint8_t floor; // DMR / P25: the signal strength of the steps without a signal (0: not known yet)
+    bool star_held; // * pressed on a paused one: its release (short) or its long press decides; it stays there
 } scan_t;
 
 // Nuisance delete: the channels (their numbers) and VFO frequencies skipped with * while a scan stood on them; left
@@ -76,6 +78,14 @@ extern scan_skipped_t scan_skipped_frequencies;
 
 bool scan_skipped_add(scan_skipped_t *skipped, uint32_t value); // false: the list is full
 bool scan_skipped_has(const scan_skipped_t *skipped, uint32_t value);
+
+// VFO frequencies skipped for good (* held): a custom data block of the codeplug ("DT" 5), kept over power off
+#define SCAN_SAVED_MAX 32
+
+bool scan_saved_has(uint32_t frequency);
+bool scan_saved_add(uint32_t frequency); // false: full, or not written
+int scan_saved_count(void);
+void scan_saved_clear(void);
 
 // The time on a channel or frequency before moving on: the step time, DMR and P25 at least DIGITAL_STEP_MS
 uint32_t scan_dwell_ms(scan_kind_t kind);

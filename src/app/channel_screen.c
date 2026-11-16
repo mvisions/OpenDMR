@@ -603,14 +603,30 @@ static bool direct_channel_key(const ui_event_t *ev)
     return false;
 }
 
+// * held on a scan's channel: its skip flag set in the codeplug (Zone Skip, or All Skip in all channels)
+static bool skip_for_good(int number)
+{
+    codeplug_channel_t c;
+
+    if ((number == 0) || !codeplug_get_channel(number, &c)) {
+        return false;
+    }
+    c.flag4 |= ((zone.index >= 0) ? FLAG4_ZONE_SKIP : FLAG4_ALL_SKIP);
+    return codeplug_write_channel(number, &c);
+}
+
 static bool handle_key(const ui_event_t *ev)
 {
     keymap_action_t action;
 
     switch (scan_key(&scan, ev)) {
         case SCAN_KEY_SKIP:
-            ui_key_beep(scan_skipped_add(&scan_skipped_channels, (uint32_t)zone_channel(position)) ? SOUND_ACK
+            ui_key_beep(scan_skipped_add(&scan_skipped_channels, (uint32_t)zone_channel(position)) ? SOUND_KEY
                                                                                                   : SOUND_ERROR);
+            (void)keymap_action(ev, KEYMAP_SCREEN_CHANNEL);
+            return true;
+        case SCAN_KEY_SKIP_SAVED:
+            ui_key_beep(skip_for_good(zone_channel(position)) ? SOUND_ACK : SOUND_ERROR);
             // fall through
         case SCAN_KEY_USED:
         case SCAN_KEY_STOPPED:
