@@ -254,12 +254,16 @@ While transmitting:
 - **SK1 + ▲** scans up, **SK1 + ▼** down. In channel mode the zone is scanned (channels with Zone Skip are skipped;
   in All Channels those with All Skip); in the VFO between the scan limits (without limits: the whole band). The
   status bar shows the scan icon.
-- While scanning: **▲** goes on at once; **◀** reverses; when it has stopped on a signal, **\*** skips that channel /
-  frequency as a nuisance (a beep; the scan shows how many are skipped); **PTT** stops the scan and transmits;
-  **any other key** stops it.
-- Skipped channels and frequencies stay out of every scan until the radio is switched off (up to 64 each), or until
-  they are cleared: quick menu → **Scan skipped** (it shows how many), OK. The channels' Zone Skip / All Skip in the
-  codeplug are not changed.
+- While scanning: **▲** goes on at once; **◀** reverses; when it has stopped on a signal, **\*** locks that channel /
+  frequency out: **short** (a click) until the radio is switched off (nuisance delete, up to 64), **held** (a
+  confirmation tone) for good: a channel gets Zone Skip (All Skip in All Channels) in the codeplug, a VFO frequency
+  is kept in the radio (up to 32). The scan goes on, and shows how many are locked out. **PTT** stops the scan and
+  transmits; **any other key** stops it.
+- Scan mode Stop: the scan ends on a signal; the quick menu then has **Lock out channel** / **Lock out frequency** at
+  the top: OK locks it out for good and scans on from the next one.
+- To see and undo them: quick menu → **Nuisance delete** (until power off) or **Lockouts** (VFO frequencies for
+  good), shown only when there are some, with how many. OK opens the list; the menu key on a row unlocks it, the last
+  row unlocks them all. A channel locked out for good: Zone Skip / All Skip off in its channel details.
 - Radio options: Scan delay (how long it stays), Scan dwell (the time on each channel / frequency), Scan mode (Hold /
   Pause / Stop), Scan On Boot.
 - DMR and P25 channels take at least 50 ms each; where the signal strength rises over the noise, the scan waits up to

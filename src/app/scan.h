@@ -78,6 +78,7 @@ extern scan_skipped_t scan_skipped_frequencies;
 
 bool scan_skipped_add(scan_skipped_t *skipped, uint32_t value); // false: the list is full
 bool scan_skipped_has(const scan_skipped_t *skipped, uint32_t value);
+void scan_skipped_remove(scan_skipped_t *skipped, int index);
 
 // VFO frequencies skipped for good (* held): a custom data block of the codeplug ("DT" 5), kept over power off
 #define SCAN_SAVED_MAX 32
@@ -85,6 +86,8 @@ bool scan_skipped_has(const scan_skipped_t *skipped, uint32_t value);
 bool scan_saved_has(uint32_t frequency);
 bool scan_saved_add(uint32_t frequency); // false: full, or not written
 int scan_saved_count(void);
+uint32_t scan_saved_frequency(int index);
+void scan_saved_remove(int index);
 void scan_saved_clear(void);
 
 // The time on a channel or frequency before moving on: the step time, DMR and P25 at least DIGITAL_STEP_MS

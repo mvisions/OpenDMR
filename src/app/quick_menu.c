@@ -49,6 +49,8 @@
 #include "codeplug.h"
 #include "codeplug_text.h"
 #include "vfo_screen.h"
+#include "channel_screen.h"
+#include "lockouts.h"
 #include "channel_details.h"
 #include "quick_menu.h"
 #include "scan.h"
@@ -68,6 +70,7 @@
 #define VALUE_SIZE       48
 
 typedef enum {
+    QM_LOCK_OUT_THIS,   // a scan stopped here (stop mode): locked out for good, the scan on
     QM_CHANNEL_DETAILS, // the channel details screen of the channel or VFO
     QM_CHANNEL_TO_VFO,
     QM_VFO_TO_CHANNEL,
@@ -97,10 +100,10 @@ typedef struct {
 } menu_t;
 
 // The orders of CHANNEL_SCREEN_QUICK_MENU_ITEMS and VFO_SCREEN_QUICK_MENU_ITEMS (DM-32)
-static const uint8_t channel_items[] = {QM_CHANNEL_DETAILS, QM_CHANNEL_TO_VFO, QM_VFO_TO_CHANNEL, QM_FILTER,
+static const uint8_t channel_items[] = {QM_LOCK_OUT_THIS,   QM_CHANNEL_DETAILS, QM_CHANNEL_TO_VFO, QM_VFO_TO_CHANNEL, QM_FILTER,
                                         QM_DMR_FILTER,      QM_CC_SCAN,        QM_TS_FILTER,      QM_TALKAROUND,
                                         QM_DISTANCE_SORT,   QM_DUAL_WATCH,     QM_DUAL_ADD,       QM_SCAN_SKIPPED};
-static const uint8_t vfo_items[] = {QM_CHANNEL_DETAILS, QM_VFO_AB,    QM_SWAP,       QM_RX_TO_TX,  QM_TX_TO_RX,
+static const uint8_t vfo_items[] = {QM_LOCK_OUT_THIS,   QM_CHANNEL_DETAILS, QM_VFO_AB,    QM_SWAP,       QM_RX_TO_TX,  QM_TX_TO_RX,
                                     QM_FILTER,          QM_DMR_FILTER, QM_CC_SCAN,   QM_TS_FILTER, QM_VFO_TO_NEW,
                                     QM_TONE_SCAN,       QM_DUAL_WATCH, QM_SCAN_LOW,  QM_SCAN_HIGH, QM_DUAL_ADD,
                                     QM_SCAN_SKIPPED,    QM_SAVED_SKIPS};
@@ -135,6 +138,9 @@ static bool shown_vfo = false;
 
 static bool row_empty(uint8_t item)
 {
+    if (item == QM_LOCK_OUT_THIS) {
+        return shown_vfo ? !vfo_screen_scan_stopped() : (channel_screen_scan_stopped() == 0);
+    }
     if (item == QM_SCAN_SKIPPED) {
         return (shown_vfo ? scan_skipped_frequencies.count : scan_skipped_channels.count) == 0;
     }
@@ -364,12 +370,23 @@ static void select_item(item_t item)
     }
 
     switch (item) {
-        case QM_SCAN_SKIPPED: // nuisance delete: back in the scans
-            skipped_list()->count = 0;
-            break;
+        case QM_LOCK_OUT_THIS:
+            settings_save_if_changed();
+            ui_pop();
+            if (shown_vfo) {
+                vfo_screen_lock_out_stopped();
+            } else {
+                channel_screen_lock_out_stopped();
+            }
+            return;
+        case QM_SCAN_SKIPPED: // nuisance delete: shown, unlocked one by one or all
+            settings_save_if_changed();
+            lockouts_open(shown_vfo ? LOCKOUTS_FREQUENCIES : LOCKOUTS_CHANNELS);
+            return;
         case QM_SAVED_SKIPS:
-            scan_saved_clear();
-            break;
+            settings_save_if_changed();
+            lockouts_open(LOCKOUTS_SAVED);
+            return;
         case QM_CHANNEL_DETAILS:
             settings_save_if_changed();
             ui_replace(&channel_details_screen, NULL);
@@ -491,6 +508,9 @@ static const char *format_item(item_t item, char *name, size_t name_size, char *
     }
 
     switch (item) {
+        case QM_LOCK_OUT_THIS:
+            snprintf(name, name_size, "%s", text(shown_vfo ? TEXT_LOCK_OUT_FREQUENCY : TEXT_LOCK_OUT_CHANNEL));
+            break;
         case QM_VFO_AB:
             snprintf(name, name_size, "VFO %c", ((vfo_screen_current() == 0) ? 'A' : 'B'));
             break;

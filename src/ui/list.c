@@ -516,7 +516,7 @@ static void pick_draw(void)
         list_view_draw_row(row, &data);
     }
 
-    bottom_bar_draw_soft_keys(text(TEXT_UI_SELECT), text(TEXT_UI_BACK));
+    bottom_bar_draw_soft_keys(text(p->action ? p->action : TEXT_UI_SELECT), text(TEXT_UI_BACK));
 }
 
 const ui_screen_t pick_list_screen = {

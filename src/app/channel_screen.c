@@ -111,6 +111,8 @@ static uint32_t squelch_shown_until;
 #define FLAG4_ALL_SKIP      0x10
 
 static scan_t scan = {.swallow_key = UI_KEY_COUNT};
+static int stopped_at = 0;          // the channel a scan stopped on (stop mode): the quick menu can lock it out
+static int8_t stopped_direction = 1;
 
 static int zone_size(void)
 {
@@ -326,6 +328,8 @@ static void scan_begin(int direction)
 {
     int at;
 
+    stopped_at = 0;
+
     if (zone_size() < 2) {
         ui_key_beep(SOUND_ERROR);
         return;
@@ -352,7 +356,12 @@ static bool scan_step(void)
     int at;
 
     if (!scan_tick(&scan, scan_kind())) {
-        return was_active && !scan.active; // stopped (stop mode)
+        if (was_active && !scan.active) { // stopped on a signal (stop mode)
+            stopped_at = zone_channel(position);
+            stopped_direction = scan.direction;
+            return true;
+        }
+        return false;
     }
     at = scan_next();
     if (at < 0) {
@@ -604,6 +613,22 @@ static bool direct_channel_key(const ui_event_t *ev)
 }
 
 // * held on a scan's channel: its skip flag set in the codeplug (Zone Skip, or All Skip in all channels)
+static bool skip_for_good(int number);
+
+int channel_screen_scan_stopped(void)
+{
+    return ((stopped_at != 0) && (stopped_at == zone_channel(position))) ? stopped_at : 0;
+}
+
+void channel_screen_lock_out_stopped(void)
+{
+    if (channel_screen_scan_stopped() == 0) {
+        return;
+    }
+    ui_key_beep(skip_for_good(stopped_at) ? SOUND_ACK : SOUND_ERROR);
+    scan_begin(stopped_direction); // on from the next one
+}
+
 static bool skip_for_good(int number)
 {
     codeplug_channel_t c;

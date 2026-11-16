@@ -236,6 +236,16 @@ bool scan_skipped_has(const scan_skipped_t *skipped, uint32_t value)
     return false;
 }
 
+void scan_skipped_remove(scan_skipped_t *skipped, int index)
+{
+    if ((index >= 0) && (index < skipped->count)) {
+        for (int i = index + 1; i < skipped->count; i++) {
+            skipped->item[i - 1] = skipped->item[i];
+        }
+        skipped->count--;
+    }
+}
+
 bool scan_skipped_add(scan_skipped_t *skipped, uint32_t value)
 {
     if (scan_skipped_has(skipped, value)) {
@@ -297,6 +307,24 @@ int scan_saved_count(void)
 {
     saved_load();
     return (int)saved.count;
+}
+
+uint32_t scan_saved_frequency(int index)
+{
+    saved_load();
+    return ((index >= 0) && ((uint32_t)index < saved.count)) ? saved.frequency[index] : 0;
+}
+
+void scan_saved_remove(int index)
+{
+    saved_load();
+    if ((index >= 0) && ((uint32_t)index < saved.count)) {
+        for (uint32_t i = (uint32_t)index + 1; i < saved.count; i++) {
+            saved.frequency[i - 1] = saved.frequency[i];
+        }
+        saved.frequency[--saved.count] = 0;
+        (void)custom_data_write(SAVED_DATA_TYPE, (const uint8_t *)&saved, sizeof(saved));
+    }
 }
 
 void scan_saved_clear(void)

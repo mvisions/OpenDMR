@@ -112,6 +112,7 @@ typedef struct {
     int (*current)(void); // where the selection starts; may be NULL
     void (*name)(int index, char *buffer, size_t size);
     void (*pick)(int index);
+    text_id_t action; // the left key's label; 0 (the language name, never one): Select
 } ui_pick_list_t;
 
 extern const ui_screen_t list_screen;      // arg: the ui_list_t
