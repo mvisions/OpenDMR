@@ -154,7 +154,7 @@ static bool red_down = false;
 // What the S meter shows: nothing until there is a receiver (plug the RSSI in here)
 static void vfo_screen_signal(s_meter_data_t *meter)
 {
-    s_meter_set_signal(meter, radio_signal());
+    s_meter_set_signal(meter, radio_signal_dbm());
     meter->open = radio_is_receiving();
 }
 
@@ -861,7 +861,7 @@ static void draw_status_bar(const codeplug_channel_t *v)
 
     vfo_screen_signal(&meter);
     status.state = meter.open ? STATUS_BAR_RECEIVING : STATUS_BAR_IDLE;
-    status.signal_bars = (int8_t)((meter.s_units * ICONS_SIGNAL_BARS) / 9);
+    status.signal_bars = s_meter_bars(&meter);
     status.scanning = scan.active || tone_scan.active;
     if (v->mode == CODEPLUG_MODE_DMR) {
         snprintf(ts_text, sizeof(ts_text), "TS%d", target.timeslot);

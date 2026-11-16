@@ -39,19 +39,28 @@
 #define GAP             3
 #define COMPACT_READING 70 // width of the reading in the compact form
 
-#define SHOWN_S1       81
-#define SHOWN_PER_UNIT 6
-#define SHOWN_S9       129
-#define OVER_S9_MAX    60
+// The usual scale: S1 at -121 dBm, 6 dB a unit, S9 at -73 dBm. With no antenna the receiver reads -140 dBm (VHF) and
+// -135 dBm (UHF), and a quiet channel outdoors shows S0; indoors, electronics' noise can light S1 (-116 dBm on VHF
+// away from a computer). The main firmware's S1 (the raw reading 81: -96 dBm VHF, -86 dBm UHF) left fair signals at
+// S0 (issue #42)
+#define DBM_S1      (-121)
+#define DB_PER_UNIT 6
+#define DBM_S9      (DBM_S1 + (8 * DB_PER_UNIT))
+#define OVER_S9_MAX 60
 
-void s_meter_set_signal(s_meter_data_t *data, uint8_t shown)
+void s_meter_set_signal(s_meter_data_t *data, int dbm)
 {
     data->s_units = 0;
     data->over_s9 = 0;
-    if (shown >= SHOWN_S1) {
-        data->s_units = (int8_t)MIN(9, 1 + ((shown - SHOWN_S1) / SHOWN_PER_UNIT));
-        data->over_s9 = (int8_t)CLAMP(shown - SHOWN_S9, 0, OVER_S9_MAX);
+    if (dbm >= DBM_S1) {
+        data->s_units = (int8_t)MIN(9, 1 + ((dbm - DBM_S1) / DB_PER_UNIT));
+        data->over_s9 = (int8_t)CLAMP(dbm - DBM_S9, 0, OVER_S9_MAX);
     }
+}
+
+int8_t s_meter_bars(const s_meter_data_t *data)
+{
+    return (int8_t)(((data->s_units * ICONS_SIGNAL_BARS) + 8) / 9);
 }
 
 void s_meter_draw(int32_t y, const s_meter_data_t *data)

@@ -117,12 +117,12 @@ static void draw(void)
 
     meter.active = true;
     if (shown.valid) {
-        s_meter_set_signal(&meter, shown.shown);
+        s_meter_set_signal(&meter, shown.dbm);
     }
     meter.open = shown.valid && shown.open;
 
     bar.state = (meter.open ? STATUS_BAR_RECEIVING : STATUS_BAR_IDLE);
-    bar.signal_bars = (int8_t)((meter.s_units * ICONS_SIGNAL_BARS) / 9);
+    bar.signal_bars = s_meter_bars(&meter);
     status_bar_draw(&bar);
 
     x = WIDGET_MARGIN + icons_draw(WIDGET_MARGIN, TITLE_Y + 1, ICONS_SIGNAL, THEME_COLOUR_TEXT_LABEL) + 8;

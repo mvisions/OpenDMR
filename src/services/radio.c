@@ -82,6 +82,7 @@
 #define SQUELCH_MAX        70
 #define SQUELCH_STEP       3
 #define SQUELCH_HYSTERESIS 3
+#define SQUELCH_OPEN       256 // over any noise reading: always open
 #define RSSI_SQUELCH_MIN_DBM (-128)
 #define RSSI_SQUELCH_STEP    3
 #define CSS_HOLD           6 // checks a receive tone may be missing before the speaker closes
@@ -174,11 +175,15 @@ int radio_band_of(uint32_t frequency)
     return (frequency >= UHF_FROM) ? 2 : ((frequency >= B220_FROM) ? 1 : 0);
 }
 
-// The noise level the squelch opens under (trxCheckAnalogSquelch())
+// The noise level the squelch opens under (trxCheckAnalogSquelch()); level 1 (0 %): open whatever the noise, as on
+// most radios (the noise reading is 8 bits, so it never reaches the level and the hysteresis over it)
 static int squelch_level(void)
 {
     int level = (channel.sql != 0) ? channel.sql : settings.squelch_defaults[radio_band_of(channel.rx_freq)];
 
+    if (level <= 1) {
+        return SQUELCH_OPEN;
+    }
     return SQUELCH_MAX - ((level - 1) * SQUELCH_STEP);
 }
 

@@ -210,6 +210,9 @@ comes the talk group, with the NAC on the right of its line (e.g. `NAC 293`).
 
 - A received signal: the whole status bar green, the signal bars lit, the S meter value in green; above S9
   the excess is shown in small red figures (`+xxdB`).
+- The S meter's scale: S1 at -121 dBm, 6 dB a unit, S9 at -73 dBm. The signal bars follow it: one from S1, all from
+  S8. A quiet channel outdoors shows S0; indoors, the noise of computers and other electronics can light a unit or
+  two.
 - DMR, the caller panel (its lines stay where they are, whatever is known):
   - the channel or VFO name, and on the right the caller's DMR ID;
   - the caller's callsign, large (its DMR ID when not known);
@@ -221,7 +224,8 @@ comes the talk group, with the NAC on the right of its line (e.g. `NAC 293`).
   - the talk group (or whom a private call is for), the S meter, the bottom bar as on the screen under it.
   The caller shows within about 0.7 s. Names come from the contacts, the DMR ID database, or the caller's talker alias.
 - Calls go into Last heard. **SK2** calls back the talk group just heard (a private call: the caller).
-- FM: audio when the squelch opens; ▶ ◀ change the squelch, shown on the screen for a moment.
+- FM: audio when the squelch opens; ▶ ◀ change the squelch, shown on the screen for a moment. 0 % is always open
+  (the noise is heard); a receive tone still applies.
 
 ---
 

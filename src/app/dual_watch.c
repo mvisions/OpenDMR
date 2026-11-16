@@ -500,7 +500,7 @@ static void draw_panel(int i, int tx)
     if (receiving) {
         s_meter_data_t meter = {.compact = true, .active = true, .open = radio_is_receiving()};
 
-        s_meter_set_signal(&meter, radio_signal());
+        s_meter_set_signal(&meter, radio_signal_dbm());
         s_meter_draw(top + 96, &meter);
         return;
     }

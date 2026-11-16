@@ -167,8 +167,8 @@ static void draw(const dmr_call_t *call, const char *mode, const char *status_it
     const char *details[DETAILS];
     int32_t lx;
 
-    s_meter_set_signal(&meter, radio_signal());
-    status.signal_bars = (int8_t)((meter.s_units * ICONS_SIGNAL_BARS) / 9);
+    s_meter_set_signal(&meter, radio_signal_dbm());
+    status.signal_bars = s_meter_bars(&meter);
     status.item1 = status_item;
     status.item2 = status_item2;
     status.item1_bold = true;

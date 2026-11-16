@@ -775,10 +775,10 @@ static void draw(void)
     }
     meter.active = true;
     meter.open = radio_is_receiving();
-    s_meter_set_signal(&meter, radio_signal());
+    s_meter_set_signal(&meter, radio_signal_dbm());
     status.state = meter.open ? STATUS_BAR_RECEIVING : STATUS_BAR_IDLE;
     status.scanning = scan.active;
-    status.signal_bars = (int8_t)((meter.s_units * ICONS_SIGNAL_BARS) / 9);
+    status.signal_bars = s_meter_bars(&meter);
 
     format_names(zone_text, sizeof(zone_text), name, sizeof(name));
     if (direct_channel > 0) {

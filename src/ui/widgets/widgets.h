@@ -104,9 +104,11 @@ typedef struct {
     int8_t over_s9; // dB over S9, 0 to 60
 } s_meter_data_t;
 
-// s_units / over_s9 from the receiver's shown signal (radio_signal(); the scale of the main firmware's
-// radioGetRxSignalShown(): S1 at 81, 6 a unit, S9 at 129)
-void s_meter_set_signal(s_meter_data_t *data, uint8_t shown);
+// s_units / over_s9 from the receiver's shown signal in dBm (radio_signal_dbm()): S1 at -121 dBm, 6 dB a unit, S9 at
+// -73 dBm
+void s_meter_set_signal(s_meter_data_t *data, int dbm);
+// The status bar's signal bars for the S meter: one from S1, all from S8
+int8_t s_meter_bars(const s_meter_data_t *data);
 void s_meter_draw(int32_t y,
                   const s_meter_data_t *data); // rows y .. y + (compact ? S_METER_COMPACT_HEIGHT : S_METER_HEIGHT) - 1
 
