@@ -22,10 +22,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
 /*
- * OpenDMR, screen: what the scans leave out (scan.c), from the quick menu: the channels or VFO frequencies locked out
- * with * until power off (nuisance delete), and the VFO frequencies locked out for good (* held). A row each, the
- * left key unlocks it (back in the scans); the last row unlocks them all. Empty: the list closes.
+ * OpenDMR: what the scans leave out (scan.c).
+ *
+ * The main menu's "Scan lockouts": all of them, one row each, the kind on the right:
+ *   Temp       a channel or VFO frequency locked out with * until power off (nuisance delete)
+ *   Saved      a VFO frequency locked out for good (* held, or the quick menu)
+ *   Zone skip  a channel with the codeplug's Zone Skip (* held in a zone, the quick menu, the CPS, channel details)
+ *   All skip   a channel with All Skip (the all channels zone)
+ * The menu key on a row unlocks it (back in the scans), the last row unlocks them all.
+ *
+ * The quick menu's "Scan lockout": the current channel or VFO frequency only, on (locked out for good) or off.
  */
 
 #include <stdio.h>
@@ -35,139 +43,254 @@
 #include "scan.h"
 #include "text.h"
 #include "ui.h"
+#include "channel_screen.h"
+#include "vfo_screen.h"
 #include "lockouts.h"
 
-static void frequency_name(uint32_t f, char *buffer, size_t size)
-{
-    snprintf(buffer, size, "%lu.%05lu MHz", (unsigned long)(f / 100000), (unsigned long)(f % 100000));
-}
+#define FLAG4_ZONE_SKIP 0x20 // channel_details.c
+#define FLAG4_ALL_SKIP  0x10
+#define FLAG4_SKIPS     (FLAG4_ZONE_SKIP | FLAG4_ALL_SKIP)
+#define FLAGGED_MAX     128 // channels with a skip flag listed
 
-static void after_unlock(int left)
-{
-    if (left == 0) {
-        ui_pop();
-        return;
-    }
-    if (*ui_state() >= left + 1) {
-        *ui_state() = left; // the "unlock all" row
-    }
-    ui_redraw(); // the list stays: one row less
-}
+/* The current channel or VFO frequency (the quick menu) */
 
-/* Locked out until power off: the channels */
-
-static int channels_count(void)
-{
-    return scan_skipped_channels.count + 1;
-}
-
-static void channels_name(int index, char *buffer, size_t size)
+static bool channel_flags(int number, uint8_t *flags)
 {
     codeplug_channel_t c;
 
-    if (index >= scan_skipped_channels.count) {
-        snprintf(buffer, size, "%s", text(TEXT_UNLOCK_ALL));
-    } else if (codeplug_get_channel((int)scan_skipped_channels.item[index], &c)) {
+    if ((number <= 0) || !codeplug_get_channel(number, &c)) {
+        return false;
+    }
+    *flags = c.flag4;
+    return true;
+}
+
+static void channel_unflag(int number)
+{
+    codeplug_channel_t c;
+
+    if (codeplug_get_channel(number, &c) && (c.flag4 & FLAG4_SKIPS)) {
+        c.flag4 &= (uint8_t)~FLAG4_SKIPS;
+        (void)codeplug_write_channel(number, &c);
+    }
+}
+
+static void temp_remove(scan_skipped_t *skipped, uint32_t value)
+{
+    for (int i = skipped->count - 1; i >= 0; i--) {
+        if (skipped->item[i] == value) {
+            scan_skipped_remove(skipped, i);
+        }
+    }
+}
+
+bool lockouts_current_locked(void)
+{
+    if (vfo_screen_is_home()) {
+        uint32_t f = vfo_screen_vfo(vfo_screen_current())->rx_freq;
+
+        return scan_saved_has(f) || scan_skipped_has(&scan_skipped_frequencies, f);
+    }
+
+    int number = channel_screen_channel;
+    uint8_t flags = 0;
+
+    return (channel_flags(number, &flags) && (flags & FLAG4_SKIPS)) ||
+           scan_skipped_has(&scan_skipped_channels, (uint32_t)number);
+}
+
+bool lockouts_set_current(bool on)
+{
+    if (vfo_screen_is_home()) {
+        uint32_t f = vfo_screen_vfo(vfo_screen_current())->rx_freq;
+
+        if (on) {
+            return scan_saved_add(f);
+        }
+        temp_remove(&scan_skipped_frequencies, f);
+        for (int i = scan_saved_count() - 1; i >= 0; i--) {
+            if (scan_saved_frequency(i) == f) {
+                scan_saved_remove(i);
+            }
+        }
+        return true;
+    }
+
+    int number = channel_screen_channel;
+
+    if (on) {
+        return channel_screen_lock_out(number);
+    }
+    temp_remove(&scan_skipped_channels, (uint32_t)number);
+    channel_unflag(number);
+    return true;
+}
+
+/* The list (the main menu) */
+
+typedef enum { KIND_TEMP_CHANNEL, KIND_TEMP_FREQUENCY, KIND_SAVED, KIND_FLAGGED, KIND_ALL } kind_t;
+
+static uint16_t flagged[FLAGGED_MAX]; // the channel numbers with a skip flag, found when the list opens
+static int flagged_count;
+
+static void find_flagged(void)
+{
+    uint8_t flags;
+
+    flagged_count = 0;
+    for (int n = CODEPLUG_CHANNELS_MIN; (n <= CODEPLUG_CHANNELS_MAX) && (flagged_count < FLAGGED_MAX); n++) {
+        if (codeplug_channel_in_use(n) && channel_flags(n, &flags) && (flags & FLAG4_SKIPS)) {
+            flagged[flagged_count++] = (uint16_t)n;
+        }
+    }
+}
+
+static int entries(void)
+{
+    return scan_skipped_channels.count + scan_skipped_frequencies.count + scan_saved_count() + flagged_count;
+}
+
+// What row index is: its kind and its index in that kind's list
+static kind_t row(int index, int *at)
+{
+    if (index >= entries()) {
+        return KIND_ALL;
+    }
+    if (index < scan_skipped_channels.count) {
+        *at = index;
+        return KIND_TEMP_CHANNEL;
+    }
+    index -= scan_skipped_channels.count;
+    if (index < scan_skipped_frequencies.count) {
+        *at = index;
+        return KIND_TEMP_FREQUENCY;
+    }
+    index -= scan_skipped_frequencies.count;
+    if (index < scan_saved_count()) {
+        *at = index;
+        return KIND_SAVED;
+    }
+    *at = index - scan_saved_count();
+    return KIND_FLAGGED;
+}
+
+static void frequency_text(uint32_t f, char *buffer, size_t size)
+{
+    snprintf(buffer, size, "%lu.%05lu", (unsigned long)(f / 100000), (unsigned long)(f % 100000));
+}
+
+static void channel_text(int number, char *buffer, size_t size)
+{
+    codeplug_channel_t c;
+
+    if (codeplug_get_channel(number, &c)) {
         codeplug_text_name(c.name, CODEPLUG_NAME_LENGTH, buffer, size);
     } else {
-        snprintf(buffer, size, "%lu", (unsigned long)scan_skipped_channels.item[index]);
+        snprintf(buffer, size, "%d", number);
     }
 }
 
-static void channels_pick(int index)
+static int count(void)
 {
-    if (index >= scan_skipped_channels.count) {
-        scan_skipped_channels.count = 0;
-    } else {
-        scan_skipped_remove(&scan_skipped_channels, index);
-    }
-    after_unlock(scan_skipped_channels.count);
+    int n = entries();
+
+    return n ? (n + 1) : 0; // and "unlock all"; none: the list says it is empty
 }
 
-/* Locked out until power off: VFO frequencies */
-
-static int frequencies_count(void)
+// Where the selection starts: the list is made again when it opens
+static int current(void)
 {
-    return scan_skipped_frequencies.count + 1;
+    find_flagged();
+    return 0;
 }
 
-static void frequencies_name(int index, char *buffer, size_t size)
+static void name(int index, char *buffer, size_t size)
 {
-    if (index >= scan_skipped_frequencies.count) {
-        snprintf(buffer, size, "%s", text(TEXT_UNLOCK_ALL));
-    } else {
-        frequency_name(scan_skipped_frequencies.item[index], buffer, size);
-    }
-}
+    int at = 0;
 
-static void frequencies_pick(int index)
-{
-    if (index >= scan_skipped_frequencies.count) {
-        scan_skipped_frequencies.count = 0;
-    } else {
-        scan_skipped_remove(&scan_skipped_frequencies, index);
-    }
-    after_unlock(scan_skipped_frequencies.count);
-}
-
-/* Locked out for good: VFO frequencies */
-
-static int saved_count(void)
-{
-    return scan_saved_count() + 1;
-}
-
-static void saved_name(int index, char *buffer, size_t size)
-{
-    if (index >= scan_saved_count()) {
-        snprintf(buffer, size, "%s", text(TEXT_UNLOCK_ALL));
-    } else {
-        frequency_name(scan_saved_frequency(index), buffer, size);
+    switch (row(index, &at)) {
+        case KIND_TEMP_CHANNEL:
+            channel_text((int)scan_skipped_channels.item[at], buffer, size);
+            break;
+        case KIND_TEMP_FREQUENCY:
+            frequency_text(scan_skipped_frequencies.item[at], buffer, size);
+            break;
+        case KIND_SAVED:
+            frequency_text(scan_saved_frequency(at), buffer, size);
+            break;
+        case KIND_FLAGGED:
+            channel_text(flagged[at], buffer, size);
+            break;
+        default:
+            snprintf(buffer, size, "%s", text(TEXT_UNLOCK_ALL));
+            break;
     }
 }
 
-static void saved_pick(int index)
+static void value(int index, char *buffer, size_t size)
 {
-    if (index >= scan_saved_count()) {
-        scan_saved_clear();
-    } else {
-        scan_saved_remove(index);
+    int at = 0;
+    uint8_t flags = 0;
+
+    buffer[0] = '\0';
+    switch (row(index, &at)) {
+        case KIND_TEMP_CHANNEL:
+        case KIND_TEMP_FREQUENCY:
+            snprintf(buffer, size, "%s", text(TEXT_LOCKOUT_TEMP));
+            break;
+        case KIND_SAVED:
+            snprintf(buffer, size, "%s", text(TEXT_LOCKOUT_SAVED));
+            break;
+        case KIND_FLAGGED:
+            if (channel_flags(flagged[at], &flags)) {
+                snprintf(buffer, size, "%s", text((flags & FLAG4_ZONE_SKIP) ? TEXT_ZONE_SKIP : TEXT_ALL_SKIP));
+            }
+            break;
+        default:
+            break;
     }
-    after_unlock(scan_saved_count());
 }
 
-static const ui_pick_list_t channel_list = {
-    .title = TEXT_SCAN_SKIPPED_MENU,
+static void pick(int index)
+{
+    int at = 0;
+
+    switch (row(index, &at)) {
+        case KIND_TEMP_CHANNEL:
+            scan_skipped_remove(&scan_skipped_channels, at);
+            break;
+        case KIND_TEMP_FREQUENCY:
+            scan_skipped_remove(&scan_skipped_frequencies, at);
+            break;
+        case KIND_SAVED:
+            scan_saved_remove(at);
+            break;
+        case KIND_FLAGGED:
+            channel_unflag(flagged[at]);
+            break;
+        default:
+            scan_skipped_channels.count = 0;
+            scan_skipped_frequencies.count = 0;
+            scan_saved_clear();
+            for (int i = 0; i < flagged_count; i++) {
+                channel_unflag(flagged[i]);
+            }
+            break;
+    }
+    find_flagged();
+    if (*ui_state() >= count()) {
+        *ui_state() = (count() > 0) ? (count() - 1) : 0;
+    }
+    ui_redraw(); // the list stays, a row less
+}
+
+const ui_pick_list_t lockouts_list = {
+    .title = TEXT_SCAN_LOCKOUTS,
     .icon = ICONS_COUNT,
-    .count = channels_count,
-    .name = channels_name,
-    .pick = channels_pick,
+    .count = count,
+    .current = current,
+    .name = name,
+    .value = value,
+    .pick = pick,
     .action = TEXT_UNLOCK,
 };
-
-static const ui_pick_list_t frequency_list = {
-    .title = TEXT_SCAN_SKIPPED_MENU,
-    .icon = ICONS_COUNT,
-    .count = frequencies_count,
-    .name = frequencies_name,
-    .pick = frequencies_pick,
-    .action = TEXT_UNLOCK,
-};
-
-static const ui_pick_list_t saved_list = {
-    .title = TEXT_SCAN_SAVED_MENU,
-    .icon = ICONS_COUNT,
-    .count = saved_count,
-    .name = saved_name,
-    .pick = saved_pick,
-    .action = TEXT_UNLOCK,
-};
-
-void lockouts_open(lockouts_t which)
-{
-    const ui_pick_list_t *list = ((which == LOCKOUTS_CHANNELS) ? &channel_list
-                                  : (which == LOCKOUTS_FREQUENCIES) ? &frequency_list
-                                                                    : &saved_list);
-
-    ui_replace(&pick_list_screen, (void *)list);
-}

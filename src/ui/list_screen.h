@@ -111,6 +111,7 @@ typedef struct {
     int (*count)(void);
     int (*current)(void); // where the selection starts; may be NULL
     void (*name)(int index, char *buffer, size_t size);
+    void (*value)(int index, char *buffer, size_t size); // right aligned, in the label colour; may be NULL
     void (*pick)(int index);
     text_id_t action; // the left key's label; 0 (the language name, never one): Select
 } ui_pick_list_t;

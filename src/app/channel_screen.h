@@ -39,9 +39,7 @@ extern volatile int channel_screen_channel; // the channel number shown
 // codeplug by them. NULL: none
 codeplug_channel_t *channel_screen_edit(void);
 
-// A scan stopped on a signal (stop mode) and the channel still there: its number, else 0. The quick menu locks it out
-// (its skip flag) and the scan goes on from the next one
-int channel_screen_scan_stopped(void);
-void channel_screen_lock_out_stopped(void);
+// A channel locked out of the scans for good: its Zone Skip, or All Skip in the all channels zone (scan lockouts)
+bool channel_screen_lock_out(int number);
 
 #endif

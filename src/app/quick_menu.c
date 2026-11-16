@@ -51,6 +51,7 @@
 #include "vfo_screen.h"
 #include "channel_screen.h"
 #include "lockouts.h"
+#include "sound.h"
 #include "channel_details.h"
 #include "quick_menu.h"
 #include "scan.h"
@@ -70,7 +71,6 @@
 #define VALUE_SIZE       48
 
 typedef enum {
-    QM_LOCK_OUT_THIS,   // a scan stopped here (stop mode): locked out for good, the scan on
     QM_CHANNEL_DETAILS, // the channel details screen of the channel or VFO
     QM_CHANNEL_TO_VFO,
     QM_VFO_TO_CHANNEL,
@@ -90,8 +90,7 @@ typedef enum {
     QM_TONE_SCAN,
     QM_SCAN_LOW,  // the VFO's scan limits (vfo_screen.c scan): the RX frequency
     QM_SCAN_HIGH,
-    QM_SCAN_SKIPPED, // nuisance delete (scan.c): how many until power off; OK clears them
-    QM_SAVED_SKIPS,  // the VFO frequencies skipped for good; OK clears them
+    QM_LOCKOUT,      // the channel / VFO frequency locked out of the scans (lockouts.c): on / off
 } item_t;
 
 typedef struct {
@@ -100,13 +99,13 @@ typedef struct {
 } menu_t;
 
 // The orders of CHANNEL_SCREEN_QUICK_MENU_ITEMS and VFO_SCREEN_QUICK_MENU_ITEMS (DM-32)
-static const uint8_t channel_items[] = {QM_LOCK_OUT_THIS,   QM_CHANNEL_DETAILS, QM_CHANNEL_TO_VFO, QM_VFO_TO_CHANNEL, QM_FILTER,
+static const uint8_t channel_items[] = {QM_CHANNEL_DETAILS, QM_CHANNEL_TO_VFO, QM_VFO_TO_CHANNEL, QM_FILTER,
                                         QM_DMR_FILTER,      QM_CC_SCAN,        QM_TS_FILTER,      QM_TALKAROUND,
-                                        QM_DISTANCE_SORT,   QM_DUAL_WATCH,     QM_DUAL_ADD,       QM_SCAN_SKIPPED};
-static const uint8_t vfo_items[] = {QM_LOCK_OUT_THIS,   QM_CHANNEL_DETAILS, QM_VFO_AB,    QM_SWAP,       QM_RX_TO_TX,  QM_TX_TO_RX,
+                                        QM_DISTANCE_SORT,   QM_DUAL_WATCH,     QM_DUAL_ADD,       QM_LOCKOUT};
+static const uint8_t vfo_items[] = {QM_CHANNEL_DETAILS, QM_VFO_AB,    QM_SWAP,       QM_RX_TO_TX,  QM_TX_TO_RX,
                                     QM_FILTER,          QM_DMR_FILTER, QM_CC_SCAN,   QM_TS_FILTER, QM_VFO_TO_NEW,
                                     QM_TONE_SCAN,       QM_DUAL_WATCH, QM_SCAN_LOW,  QM_SCAN_HIGH, QM_DUAL_ADD,
-                                    QM_SCAN_SKIPPED,    QM_SAVED_SKIPS};
+                                    QM_LOCKOUT};
 static const menu_t channel_menu = {channel_items, sizeof(channel_items)};
 static const menu_t vfo_menu = {vfo_items, sizeof(vfo_items)};
 
@@ -138,13 +137,7 @@ static bool shown_vfo = false;
 
 static bool row_empty(uint8_t item)
 {
-    if (item == QM_LOCK_OUT_THIS) {
-        return shown_vfo ? !vfo_screen_scan_stopped() : (channel_screen_scan_stopped() == 0);
-    }
-    if (item == QM_SCAN_SKIPPED) {
-        return (shown_vfo ? scan_skipped_frequencies.count : scan_skipped_channels.count) == 0;
-    }
-    return (item == QM_SAVED_SKIPS) && (scan_saved_count() == 0);
+    return false;
 }
 
 static const ui_screen_t quick_menu_screen;
@@ -240,6 +233,11 @@ static void change(item_t item, int direction)
             settings.dmr_cc_ts_filter = (uint8_t)(on ? (settings.dmr_cc_ts_filter | TS_FILTER)
                                                      : (settings.dmr_cc_ts_filter & ~TS_FILTER));
             break;
+        case QM_LOCKOUT: // at once: in the codeplug or the saved list, not in the settings
+            if (on != lockouts_current_locked()) {
+                ui_key_beep(lockouts_set_current(on) ? SOUND_KEY : SOUND_ERROR);
+            }
+            return;
         case QM_TALKAROUND:
             talkaround = (on && talkaround_possible());
             return;
@@ -349,12 +347,6 @@ static void vfo_to_new_channel(void)
 }
 
 // The left key on an item; the menu is left after it
-// The skipped list of this menu's screen: the channels, or the VFO frequencies
-static scan_skipped_t *skipped_list(void)
-{
-    return shown_vfo ? &scan_skipped_frequencies : &scan_skipped_channels;
-}
-
 static void select_item(item_t item)
 {
     if (((item == QM_VFO_TO_CHANNEL) || (item == QM_VFO_TO_NEW)) && (confirming < 0)) {
@@ -370,23 +362,6 @@ static void select_item(item_t item)
     }
 
     switch (item) {
-        case QM_LOCK_OUT_THIS:
-            settings_save_if_changed();
-            ui_pop();
-            if (shown_vfo) {
-                vfo_screen_lock_out_stopped();
-            } else {
-                channel_screen_lock_out_stopped();
-            }
-            return;
-        case QM_SCAN_SKIPPED: // nuisance delete: shown, unlocked one by one or all
-            settings_save_if_changed();
-            lockouts_open(shown_vfo ? LOCKOUTS_FREQUENCIES : LOCKOUTS_CHANNELS);
-            return;
-        case QM_SAVED_SKIPS:
-            settings_save_if_changed();
-            lockouts_open(LOCKOUTS_SAVED);
-            return;
         case QM_CHANNEL_DETAILS:
             settings_save_if_changed();
             ui_replace(&channel_details_screen, NULL);
@@ -497,8 +472,7 @@ static const char *format_item(item_t item, char *name, size_t name_size, char *
         [QM_TONE_SCAN] = TEXT_TONE_SCAN,
         [QM_SCAN_LOW] = TEXT_SCAN_LOW,
         [QM_SCAN_HIGH] = TEXT_SCAN_HIGH,
-        [QM_SCAN_SKIPPED] = TEXT_SCAN_SKIPPED_MENU,
-        [QM_SAVED_SKIPS] = TEXT_SCAN_SAVED_MENU,
+        [QM_LOCKOUT] = TEXT_SCAN_LOCKOUT,
     };
     const char *value = NULL;
 
@@ -508,9 +482,6 @@ static const char *format_item(item_t item, char *name, size_t name_size, char *
     }
 
     switch (item) {
-        case QM_LOCK_OUT_THIS:
-            snprintf(name, name_size, "%s", text(shown_vfo ? TEXT_LOCK_OUT_FREQUENCY : TEXT_LOCK_OUT_CHANNEL));
-            break;
         case QM_VFO_AB:
             snprintf(name, name_size, "VFO %c", ((vfo_screen_current() == 0) ? 'A' : 'B'));
             break;
@@ -535,13 +506,8 @@ static const char *format_item(item_t item, char *name, size_t name_size, char *
         case QM_TS_FILTER:
             value = on_off(settings.dmr_cc_ts_filter & TS_FILTER);
             break;
-        case QM_SCAN_SKIPPED:
-            snprintf(out, size, "%u", (unsigned)skipped_list()->count);
-            value = out;
-            break;
-        case QM_SAVED_SKIPS:
-            snprintf(out, size, "%d", scan_saved_count());
-            value = out;
+        case QM_LOCKOUT:
+            value = on_off(lockouts_current_locked());
             break;
         case QM_TALKAROUND:
             value = (talkaround_possible() ? on_off(talkaround) : text(TEXT_N_A));

@@ -507,16 +507,28 @@ static void pick_draw(void)
         }
         p->name(index, name, sizeof(name));
 
+        char value[PICK_NAME_SIZE] = "";
+
+        if (p->value) {
+            p->value(index, value, sizeof(value));
+        }
+
         list_view_row_t data = {
             .icon = p->icon,
             .name = name,
+            .value = (value[0] ? value : NULL),
             .selected = (index == selected),
         };
 
         list_view_draw_row(row, &data);
     }
 
-    bottom_bar_draw_soft_keys(text(p->action ? p->action : TEXT_UI_SELECT), text(TEXT_UI_BACK));
+    if (count == 0) { // a dimmed "List empty" row, nothing to pick
+        list_view_row_t empty = {.icon = ICONS_COUNT, .name = text(TEXT_LIST_EMPTY), .dimmed = true};
+
+        list_view_draw_row(0, &empty);
+    }
+    bottom_bar_draw_soft_keys((count > 0) ? text(p->action ? p->action : TEXT_UI_SELECT) : NULL, text(TEXT_UI_BACK));
 }
 
 const ui_screen_t pick_list_screen = {

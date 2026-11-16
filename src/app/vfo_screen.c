@@ -141,8 +141,6 @@ static bool dirty = false;
 static bool editing_tx = false; // the TX frequency was stepped last: shown large, digits enter it
 
 static scan_t scan = {.swallow_key = UI_KEY_COUNT};
-static uint32_t stopped_at = 0; // the frequency a scan stopped on (stop mode): the quick menu can lock it out
-static int8_t stopped_direction = 1;
 static digit_entry_t entry = {
     .max = FREQ_DIGITS, .dot_after = FREQ_DOT_AFTER, .zero_fill = true, .ok_on_release = true};
 static uint8_t held = 0; // UI_MODIFIER_x of the last key or rotary event
@@ -468,7 +466,6 @@ static void scan_begin(int direction)
     }
     digit_entry_stop(&entry);
     editing_tx = false;
-    stopped_at = 0;
     if ((v->rx_freq < low) || (v->rx_freq > high)) {
         v->rx_freq = (direction > 0) ? low : high; // into the range
         dirty = true;
@@ -477,32 +474,13 @@ static void scan_begin(int direction)
 }
 
 // On the timer while scanning; true: redraw. The VFO is saved when the scan ends, not at each step
-bool vfo_screen_scan_stopped(void)
-{
-    return (stopped_at != 0) && (stopped_at == vfo()->rx_freq);
-}
-
-void vfo_screen_lock_out_stopped(void)
-{
-    if (!vfo_screen_scan_stopped()) {
-        return;
-    }
-    ui_key_beep(scan_saved_add(stopped_at) ? SOUND_ACK : SOUND_ERROR);
-    scan_begin(stopped_direction); // on from the next one
-}
-
 static bool scan_step(void)
 {
     bool was_active = scan.active;
     uint32_t f;
 
     if (!scan_tick(&scan, scan_kind())) {
-        if (was_active && !scan.active) { // stopped on a signal (stop mode)
-            stopped_at = vfo()->rx_freq;
-            stopped_direction = scan.direction;
-            return true;
-        }
-        return false;
+        return was_active && !scan.active;
     }
     f = scan_next();
     if (f == 0) {

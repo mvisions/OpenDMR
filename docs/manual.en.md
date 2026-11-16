@@ -259,11 +259,12 @@ While transmitting:
   confirmation tone) for good: a channel gets Zone Skip (All Skip in All Channels) in the codeplug, a VFO frequency
   is kept in the radio (up to 32). The scan goes on, and shows how many are locked out. **PTT** stops the scan and
   transmits; **any other key** stops it.
-- Scan mode Stop: the scan ends on a signal; the quick menu then has **Lock out channel** / **Lock out frequency** at
-  the top: OK locks it out for good and scans on from the next one.
-- To see and undo them: quick menu → **Nuisance delete** (until power off) or **Lockouts** (VFO frequencies for
-  good), shown only when there are some, with how many. OK opens the list; the menu key on a row unlocks it, the last
-  row unlocks them all. A channel locked out for good: Zone Skip / All Skip off in its channel details.
+- The channel or VFO quick menu's **Scan lockout** (On / Off, with ◀ ▶ or the knob) is the current channel or
+  frequency: On locks it out for good (also after a Stop mode scan ended on it), Off puts it back in the scans,
+  however it was locked out.
+- Main menu → **Scan lockouts** lists all of them, the kind on the right: Temp (until power off), Saved (a VFO
+  frequency), Zone skip / All skip (a channel, from the codeplug: also those set in the CPS or the channel details).
+  The menu key on a row unlocks it, the last row unlocks them all.
 - Radio options: Scan delay (how long it stays), Scan dwell (the time on each channel / frequency), Scan mode (Hold /
   Pause / Stop), Scan On Boot.
 - DMR and P25 channels take at least 50 ms each; where the signal strength rises over the noise, the scan waits up to

@@ -25,13 +25,15 @@
 #ifndef DM32_LOCKOUTS_H
 #define DM32_LOCKOUTS_H
 
-// What the scans leave out, shown and unlocked one by one (lockouts.c); in place of the quick menu
-typedef enum {
-    LOCKOUTS_CHANNELS,    // until power off (nuisance delete), channel mode
-    LOCKOUTS_FREQUENCIES, // until power off, VFO
-    LOCKOUTS_SAVED,       // VFO frequencies for good
-} lockouts_t;
+#include "list_screen.h"
 
-void lockouts_open(lockouts_t which);
+#include <stdbool.h>
+
+// What the scans leave out (lockouts.c). The main menu: all of them, unlocked one by one (ui_push(&pick_list_screen,
+// &lockouts_list)). The quick menu: the current channel or VFO frequency, on (locked out for good) or off.
+extern const ui_pick_list_t lockouts_list;
+
+bool lockouts_current_locked(void);
+bool lockouts_set_current(bool on); // false: not done (the list full, a write failed)
 
 #endif

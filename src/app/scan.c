@@ -203,7 +203,7 @@ scan_key_t scan_key(scan_t *scan, const ui_event_t *ev)
         return SCAN_KEY_NONE; // and transmits
     }
     scan->swallow_key = ev->key;
-    if ((ev->key == UI_KEY_STAR) && (scan->state == STATE_PAUSED)) {
+    if ((ev->key == UI_KEY_STAR) && (scan->state != STATE_SCANNING)) { // on a signal (waiting for its audio too)
         scan->star_held = true;
         scan->swallow_key = UI_KEY_COUNT;
         scan->due_ms = systime_get_ms() + STAR_HOLD_MS; // it stays there while * is held

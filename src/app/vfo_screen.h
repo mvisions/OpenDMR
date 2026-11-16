@@ -54,9 +54,5 @@ codeplug_channel_t *vfo_screen_vfo(int vfo);
 void vfo_screen_save(int vfo); // after a change from another screen: written to the codeplug at once
 void vfo_screen_reload(void);  // the codeplug changed under them (codeplug_set_all_power()): read again
 void vfo_screen_tone_scan(int type); // the quick menu: the receive tone scanned (0 all, 1 CTCSS, 2 DCS, 3 iDCS)
-// A scan stopped on a signal (stop mode) and the VFO still on it: the quick menu locks the frequency out (saved) and
-// the scan goes on from the next one
-bool vfo_screen_scan_stopped(void);
-void vfo_screen_lock_out_stopped(void);
 
 #endif
