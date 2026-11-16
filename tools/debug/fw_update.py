@@ -16,6 +16,7 @@ Not while transmitting (the radio refuses). The bootloader (below 0xC000) is nev
 the upgrade mode and the stock firmware loader still work.
 """
 import argparse
+import json
 import os
 import struct
 import sys
@@ -38,11 +39,33 @@ ERRORS = {1: 'the sector came in damaged', 2: 'address outside the firmware area
 
 
 UART_CLOCK = 84000000 // 16  # the radio's UART: 84 MHz APB, baud = UART_CLOCK / divisor
-FAST_DIVISORS = (21,)  # 250000 baud. 375000 lost bytes from the radio to the PC now and then (the green radio: the
-                       # update stopped after 7 sectors; tools/backup/dm32_dump.py measured it too), 250000 never
+FAST_DIVISORS = (7, 14, 21)  # 750000, 375000, 250000 baud: the fastest that answers. A CH340 loses a reply byte to
+                             # the PC now and then at 375000 and up: a write checks its sector then (write_sector())
 SWITCH_SETTLE_S = 0.5  # after a speed change, before talking (the radio waits about 2 s for 'H')
-PROBE_DIVISORS = (14, 16, 21)  # where a radio left in the update by an older run may be: 375000, 328125, 250000
+PROBE_DIVISORS = (7, 14, 16, 21)  # where a radio left in the update by an older run may be: 750000 ... 250000
 UPDATER_AREA = 0x44400  # updater/updater.ld: the update area, which the firmware's loader gives the program
+
+
+SPEEDS_FILE = os.path.join(os.path.expanduser('~'), '.opendmr-fw-speeds.json')  # the speed of each port
+
+
+def remembered_speeds():
+    try:
+        with open(SPEEDS_FILE, encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def remember_speed(port_name, divisor):
+    if port_name:
+        speeds = remembered_speeds()
+        speeds[port_name] = divisor
+        try:
+            with open(SPEEDS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(speeds, f)
+        except OSError:
+            pass
 
 
 class Updater:
@@ -118,9 +141,12 @@ class Updater:
         self.p.baudrate = 115200
         return None
 
-    def speed_up(self):
-        """The fastest speed the cable takes (the update program goes back to the old one if 'H' doesn't come)."""
-        for divisor in FAST_DIVISORS:
+    def speed_up(self, port_name=None):
+        """The fastest speed the cable takes (the update program goes back to the old one if 'H' doesn't come). The
+        one that worked on this port last time is tried first, the faster ones that failed there not again."""
+        known = remembered_speeds().get(port_name)
+        divisors = FAST_DIVISORS if known is None else tuple(d for d in FAST_DIVISORS if d >= known)
+        for divisor in divisors:
             if self.p.baudrate == UART_CLOCK // divisor:
                 return
             if self.p.baudrate > UART_CLOCK // divisor:
@@ -138,6 +164,7 @@ class Updater:
             if self.wait_for(b'UPD1', 1.0) is not None:
                 self.p.write(b'Y')  # both ways sound: the radio keeps the speed
                 if self.wait_for(b'Y', 0.5) is not None:
+                    remember_speed(port_name, divisor)
                     return
             self.p.baudrate = old  # the radio goes back by itself
             time.sleep(4.5)  # up to two waits of about 2 s
@@ -147,29 +174,48 @@ class Updater:
                 raise RuntimeError('lost the radio after trying %d baud' % (UART_CLOCK // divisor))
 
     def sector_crc(self, address):
-        self.p.write(b'C' + struct.pack('>I', address))
-        reply = self.read(5)
-        if reply[0:1] != b'C':
-            raise RuntimeError('bad reply to C: %r' % reply)
-        return struct.unpack('>I', reply[1:])[0]
+        for _ in range(4):  # a reply lost or garbled at a fast speed: asked again
+            self.p.reset_input_buffer()
+            self.p.write(b'C' + struct.pack('>I', address))
+            try:
+                reply = self.read(5, timeout=1.0)
+            except RuntimeError:
+                continue
+            if reply[0:1] == b'C':
+                return struct.unpack('>I', reply[1:])[0]
+            time.sleep(0.05)
+        raise RuntimeError('no answer to C for 0x%X' % address)
 
     def write_sector(self, address, data):
-        for attempt in range(3):
-            self.p.write(b'W' + struct.pack('>I', address) + data + struct.pack('>I', zlib.crc32(data)))
-            reply = self.read(1, timeout=10.0)
+        want = zlib.crc32(data)
+        error = None
+        for attempt in range(4):
+            self.p.reset_input_buffer()
+            self.p.write(b'W' + struct.pack('>I', address) + data + struct.pack('>I', want))
+            try:
+                reply = self.read(1, timeout=10.0)
+            except RuntimeError:
+                reply = b''
             if reply == b'K':
                 return
-            if reply != b'E':
-                raise RuntimeError('bad reply to W: %r' % reply)
-            error = self.read(1)[0]
-            if error not in (1, 5):  # damaged on the way: send it again
-                raise RuntimeError('sector 0x%X: %s' % (address, ERRORS.get(error, error)))
-        raise RuntimeError('sector 0x%X: %s' % (address, ERRORS.get(error, error)))
+            if reply == b'E':
+                error = self.read(1)[0]
+                if error not in (1, 5):  # damaged on the way: send it again
+                    raise RuntimeError('sector 0x%X: %s' % (address, ERRORS.get(error, error)))
+                continue
+            # the reply lost or garbled (a CH340 at a fast speed): the sector says whether it was written
+            time.sleep(0.05)
+            if self.sector_crc(address) == want:
+                return
+        raise RuntimeError('sector 0x%X: %s' % (address, ERRORS.get(error, error) if error else 'no answer'))
 
     def progress(self, done, total):
+        """The radio's progress bar; a lost reply does not matter"""
         self.p.write(b'P' + struct.pack('>HH', done, total))
-        if self.read(1) != b'P':
-            raise RuntimeError('bad reply to P')
+        try:
+            self.read(1, timeout=0.5)
+        except RuntimeError:
+            self.p.reset_input_buffer()
 
     def restart(self):
         """The watchdog resets the radio about 3 s after 'B' and stays on: turned off here over the cable as soon as
@@ -219,7 +265,7 @@ def main():
     u = Updater(args.port)
     t0 = time.time()
     u.start()
-    u.speed_up()
+    u.speed_up(args.port)
     print('the radio is in the update at %d baud (%d sectors, %s)' % (u.p.baudrate, len(sectors),
                                                                        os.path.basename(args.bin)))
     screen = Screen(u.p)
