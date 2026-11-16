@@ -135,6 +135,7 @@ class Radio:
 
 
 def main():
+    sys.stdout.reconfigure(encoding='utf-8')  # channel names in Chinese
     r = Radio(sys.argv[1])
     args = sys.argv[2:] or ['state']
     if args[0] == 'state':
