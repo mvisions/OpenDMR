@@ -43,28 +43,9 @@ PROVIDE (_estartstack =  0x00057FFC);
 
 SECTIONS
 {
-    .startup : {
-		*crt0.o(.text)
-		. = ALIGN(0x4) ;
-    } > MEM0
-
-    /* Data that hardly ever changes, at a fixed place after the start code: the fonts, the icons, the countries, the
-       vocoder and P25 tables. A code change no longer moves them, and a firmware update (tools/debug/fw_update.py
-       compares each 4 KB sector) writes again only the sectors that changed. No code here: its calls out would
-       change with the code it calls. .text follows, then .data (crt0.S copies .data from __etext). */
-    .stable 0x0300D000 : {
-		__stable_start = . ;
-		*/graphics/fonts/*(.flashconst* .rodata*)
-		*/graphics/icons.o(.flashconst* .rodata*)
-		*/services/dmr_countries.o(.flashconst* .rodata*)
-		*/vocoder/*(.rodata*)
-		*/p25/*(.rodata*)
-		. = ALIGN(0x1000) ;
-		__stable_end = . ;
-    } > MEM0
-
     .text : {
 		. = ALIGN(0x4) ;
+		*crt0.o(.text)
 		__stext = . ;
 		*(EXCLUDE_FILE(*/startup/* */freertos/* */vocoder/ambe_enc* */p25/imbe/imbe_dec* */p25/imbe/imbe_parms* */p25/imbe/imbe_enc* */p25/imbe/imbe_ana.*) .text)
 		*(EXCLUDE_FILE(*/startup/* */freertos/* */vocoder/ambe_enc* */p25/imbe/imbe_dec* */p25/imbe/imbe_parms* */p25/imbe/imbe_enc* */p25/imbe/imbe_ana.*) .text*)
@@ -181,7 +162,6 @@ SECTIONS
 	/* the start stack is at _estartstack, not a section */
 	/DISCARD/ : { *(.startstack.sec) *(.fstack.sec) *(.dahua_entry) }
 
-    ASSERT(SIZEOF(.startup) <= 0x1000, "The start code runs into the stable data at 0x0300D000")
     ASSERT(g_top_irqstack <= __update_area_start, "RAM overflow: bss and the IRQ stack run into the vocoder / update area")
     ASSERT(__vocoder_ram_end <= __update_area_end, "The vocoder does not fit in its RAM")
     ASSERT(__p25_ram_end <= __update_area_end, "The P25 decoder does not fit in its RAM")

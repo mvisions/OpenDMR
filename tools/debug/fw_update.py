@@ -287,6 +287,12 @@ def main():
             screen.line('percent', '%d%%' % percent)
     # all written: checked once more before the restart
     bad = [a for a, d in sectors if u.sector_crc(a) != zlib.crc32(d)]
+    for _ in range(2):  # a sector spoilt on the way (a CH340 at a fast speed): written again
+        if not bad:
+            break
+        for a in bad:
+            u.write_sector(a, dict(sectors)[a])
+        bad = [a for a, d in sectors if u.sector_crc(a) != zlib.crc32(d)]
     if bad:
         sys.exit('\nstill different: %s (the radio stays in the update: run again)' % ', '.join(hex(a) for a in bad))
     screen.line('title', 'Update done', GREEN)
