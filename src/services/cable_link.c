@@ -162,6 +162,9 @@ static uint32_t expected_length(uint32_t received)
     if ((request[0] == 'D') && (received >= 2) && ((request[1] == 'k') || (request[1] == 'q'))) {
         return (request[1] == 'k') ? 5 : 2; // the test interface (app/test_link.c): no wait for the line to go quiet
     }
+    if ((request[0] == 'D') && (received >= 2) && (request[1] == 'Z')) {
+        return 8; // a packed read (debug.c)
+    }
     return 0;
 }
 

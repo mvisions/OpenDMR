@@ -42,6 +42,10 @@
  *                               at a raw flash address in [FONT_CJK_FLASH_ADDRESS, FONT_CJK_FLASH_END) only; sum: of the
  *                               data bytes, 16 bits (a request cut short by the UART is refused). The sector is erased,
  *                               programmed and read back with part 3                      -> 'D' 'F' ok(1)
+ *   'D' 'Z' addr(4) len(2)      read in the data flash window (up to 4096 bytes), packed: a byte c < 0x80 then c + 1
+ *                               bytes as they are, c >= 0x80 then one byte repeated c - 0x80 + 3 times (the codeplug
+ *                               is mostly 0xFF and 0x00: the CPS reads it ten times faster)
+ *                               -> 'D' 'Z' ok(1) length(2) packed; ok 0: it does not fit the reply (read it unpacked)
  */
 
 #include <string.h>
@@ -91,6 +95,47 @@ static void write_value(uint32_t address, uint8_t width, uint32_t value)
             *(volatile uint32_t *)address = value;
             break;
     }
+}
+
+// PackBits like ('D' 'Z'): the packed length, 0 when it does not fit in room
+static uint32_t pack(const uint8_t *in, uint32_t n, volatile uint8_t *out, uint32_t room)
+{
+    uint32_t i = 0;
+    uint32_t o = 0;
+
+    while (i < n) {
+        uint32_t run = 1;
+
+        while (((i + run) < n) && (in[i + run] == in[i]) && (run < 130)) {
+            run++;
+        }
+        if (run >= 3) {
+            if ((o + 2) > room) {
+                return 0;
+            }
+            out[o++] = (uint8_t)(0x80 + (run - 3));
+            out[o++] = in[i];
+            i += run;
+            continue;
+        }
+
+        uint32_t start = i;
+        uint32_t length = 0;
+
+        while ((i < n) && (length < 128) &&
+               !(((i + 2) < n) && (in[i] == in[i + 1]) && (in[i] == in[i + 2]))) { // literals until a run of 3
+            i++;
+            length++;
+        }
+        if ((o + 1 + length) > room) {
+            return 0;
+        }
+        out[o++] = (uint8_t)(length - 1);
+        for (uint32_t k = 0; k < length; k++) {
+            out[o++] = in[start + k];
+        }
+    }
+    return o;
 }
 
 uint32_t debug_handle_command(volatile uint8_t *request, volatile uint8_t *reply, uint32_t reply_size)
@@ -149,6 +194,19 @@ uint32_t debug_handle_command(volatile uint8_t *request, volatile uint8_t *reply
             reply[2] = flash_write(address, (const uint8_t *)&request[8], (request[6] << 8) | request[7]) ? 1 : 0;
             reply_length = 3;
             break;
+
+        case 'Z': { // the scratch buffer of the font upload: not at the same time
+            uint32_t length = (request[6] << 8) | request[7];
+            uint32_t n = 0;
+
+            if ((length > 0) && (length <= sizeof(font_sector)) && flash_read(address, font_sector, length)) {
+                n = pack(font_sector, length, &reply[5], reply_size - 5);
+            }
+            reply[2] = (n > 0) ? 1 : 0;
+            reply[3] = (uint8_t)(n >> 8);
+            reply[4] = (uint8_t)n;
+            reply_length = 5 + n;
+        } break;
 
         case 'F': {
             uint8_t part = request[6];
