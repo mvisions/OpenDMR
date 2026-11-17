@@ -39,7 +39,13 @@ English: [roadmap.en.md](roadmap.en.md)
 - 弱信号灵敏度测量，和商用 P25 电台、MMDVM 热点互通实测
 - 中继的上下行处理
 
+**NXDN**（NXDN48 收发已完成，见 [nxdn/README.md](../nxdn/README.md)）
+
+- NXDN ID 到呼号的数据库（来电显示呼号）
+- 解调改进（空中语音帧误码约 1.4 %：均衡）
+- 和商用 NXDN 电台互通实测
+
 ## 考虑中（需要较多时间和测试设备）
 
-- NXDN（NXDN48 / NXDN96）
+- NXDN96、NXDN 集群和加密
 - P25 加密（DES / AES）、集群、Phase 2（TDMA）

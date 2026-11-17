@@ -41,7 +41,13 @@ Suggestions are welcome in the [issues](https://github.com/va3bpf/OpenDMR/issues
 - Weak signal sensitivity measured; tests with commercial P25 radios and MMDVM hotspots
 - Repeater (duplex) operation
 
+**NXDN** (NXDN48 receive and transmit done, see [nxdn/README.md](../nxdn/README.md), Chinese)
+
+- An NXDN ID to callsign database (callers shown by callsign)
+- A better demodulator (about 1.4 % voice frame bit errors over the air: an equaliser)
+- Tests with commercial NXDN radios
+
 ## Being considered (needs much time and test equipment)
 
-- NXDN (NXDN48 / NXDN96)
+- NXDN96, NXDN trunking and encryption
 - P25 encryption (DES / AES), trunking, Phase 2 (TDMA)

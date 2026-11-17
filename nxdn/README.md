@@ -9,10 +9,11 @@ OpenDMR 的 NXDN 研究和实现（分支 `feature/nxdn`）。只按公开规范
 | `py/demod.py` | IQ 录音（48 kHz 双声道 wav）→ FM 鉴频 → 找帧同步字（FSW 0xCDF59）→ 每帧单独定时、按 FSW 定电平 → `<wav>.frames.npy` |
 | `py/frames.py` | 去扰码（X⁹+X⁴+1，每帧从 0x0E4 开始）→ LICH（7 比特 + 偶校验）→ 4 个 VCH（72 比特，和 DMR 的 AMBE+2 帧比特顺序相同）→ 我们的声码器（`vocoder/py`）解成 WAV |
 | `py/l2.py` | SACCH / FACCH1：解交织、去打孔、软判决 Viterbi（K=5，G1 = 1+D³+D⁴，G2 = 1+D+D²+D⁴）、CRC6 / CRC12（初值全 1）；层 3 消息（VCALL、TX_REL、PROP_FORM）。`python nxdn/py/l2.py` 自测 |
-| `py/tx.py` | 发射方向：AMBE 帧 + 主叫 / 组号 / RAN → 常规组呼（前导、第一帧两个 FACCH1 带 VCALL、语音帧带 SACCH 超帧、最后一帧两个 FACCH1 带 TX_REL）→ 加扰 → 4FSK（平方根升余弦 α=0.2 + 一个符号的保持）→ 48 kHz IQ；可加噪声（`--snr`）和载波频偏（`--offset`） |
+| `py/tx.py` | 发射方向：AMBE 帧 + 主叫 / 组号 / RAN → 常规组呼（前导、第一帧两个 FACCH1 带 VCALL、语音帧带 SACCH 超帧、最后一帧和第一帧一样是非超帧 SACCH、两个 FACCH1 带 TX_REL）→ 加扰 → 4FSK（平方根升余弦 α=0.2 + 一个符号的保持）→ 48 kHz IQ；可加噪声（`--snr`）和载波频偏（`--offset`） |
 | `py/chip.py` | 电台物理层抓到的符号（`p25_phy.py --dibits`，4800 符号/秒）按 NXDN48 分析：每块电平分布、两个采样相位、和发送的帧逐符号比对（`--reference`）、解 LICH / SACCH / VCH |
 | `py/pi.py`、`py/pi_switch.py`、`py/run_alt.py`、`py/sweep.py` | 树莓派热点（Pi-Star + pistar-signal-gen）：ssh 控制（地址、密码只放环境变量 `PISTAR_HOST` / `PISTAR_PASS`）、P25 / NXDN 交替发射、交替发射同时在电台上抓取、增益和频偏扫描 |
 | `py/radio_tx.py`、`py/radio_pair.py`、`py/chip96.py`、`py/patterns.py` | 电台对电台的 NXDN96：固件 `p25_phy_tx_test(..., 1)` 循环发 `p25_phy_tx_loop` 里的符号；先让接收端开始抓、发射时写频线保持安静、发完再读回；按 4800 符号/秒分析；简单图样帧 |
+| `py/tx_test.py`、`py/hs_sweep.py`、`py/hs_trace.py`、`py/hs_compare.py`、`py/tx_level.py`、`c/check_tx.py` | 固件发射的测试：两台电台一发一收看计数器；热点（MMDVMHost 开 NXDN）收我们的信号，扫参数看日志；从 MMDVMHost 的调制解调器跟踪里取帧、找 FSW、和我们发的帧逐比特比；用另一台电台的鉴频器量频偏；电脑上编译固件的发射部分和 `tx.py` 逐符号对比 |
 | `py/probe_l2.py` | 排查用：各种交织、打孔、抽头顺序的组合，看哪种和录音对得上 |
 | `data/` | 下载的规范 PDF 和录音，**不进仓库**（`.gitignore`）：`spec/NXDN-TS-1-*.pdf`（qsl.net/k/kb9mwr 的镜像）、`iq/NXDN48 IQ.wav`、`iq/NXDN96 IQ.wav`（sigidwiki.com 的 NXDN_IQ.zip） |
 
@@ -188,7 +189,7 @@ python nxdn/py/frames.py "nxdn/data/iq/NXDN96 IQ.wav"
 
 ## 固件里的 NXDN48 接收（2026-11-17 晚，能出声）
 
-- 信道模式 NXDN（`CODEPLUG_MODE_NXDN` 6，写频数据里存成数字信道 + `opendmr_mode` 0xA5，CPS 显示为 DMR），模式键在 P25 之后，只收不发。
+- 信道模式 NXDN（`CODEPLUG_MODE_NXDN` 6，写频数据里存成数字信道 + `opendmr_mode` 0xA5），模式键在 P25 之后。
 - 通路：FD6818 保持 DMR 设置，HR_C7000 切 FM 录音（`nxdn_fm_start()` / `nxdn_fm_read()`，p25_phy.c：`WORK_MODE` 0x80，
   `FM_BANDWIDTH` 0x1F，`FM_DEV_COEF` 0x40A25，DMR 的中断处理让开）→ `nxdn_core.c`（解调、找帧、解帧）→ `nxdn_radio.c`
   （通话、主叫 / 组号 / RAN 显示、最近呼叫）→ 我们的 AMBE+2 解码器 → 提示音 FIFO 播放（调制解调器一直在 FM，不能用 DMR 的播放通路）。
@@ -205,4 +206,37 @@ python nxdn/py/frames.py "nxdn/data/iq/NXDN96 IQ.wav"
 - 工具：`nxdn/c/run.py`（电脑上编译 `nxdn_core.c` 跑录音）、`nxdn_stats.py`（计数器）、`vch_check.py`、`tap_grab.py`、
   `tap_ber.py`、`make_voice.py`（WAV / .bit → 热点帧文件）、`flash_play.py`（AMBE 帧写进 flash 调试区 0x410000 循环播放，
   测解码和播放通路；DMR ID 数据库在 0x5AF000 – 0x8FF000，别碰）。
-- 还要做：发射；通话界面底栏的 "12.5K"；按键提示音和 NXDN 语音共用 FIFO；NXDN 下省电关着；RAN 过滤；CPS 支持。
+- 还要做：按键提示音和 NXDN 语音共用 FIFO；NXDN 下省电关着（发射、RAN 过滤、CPS 支持、底栏 6.25K 见下面两节）。
+
+## 固件里的 NXDN48 发射（2026-11-17，热点误码率 0 %）
+
+- 编码：`nxdn_core.c` 的 `nxdn_tx_*`（帧、LICH、SACCH、FACCH1、VCH、VCALL / TX_REL），在电脑上和 `tx.py` 逐符号相同
+  （`c/check_tx.py`）。按 PTT：停录音，话筒每 20 ms 一帧进我们的 AMBE+2 编码器，4 帧一个 NXDN 帧；每个符号重复两次，
+  送进 P25 物理层的发射 FIFO（芯片 4800 符号/秒）。前导之前先发 144 个 +3 / −3 符号（60 ms）：第一帧语音要 4 帧话筒
+  加编码约 95 ms 才有，中断又提前 30 ms 取一块。松开：用静音补满这一帧，发结束帧，回到接收。
+- 内存：编码器那条路径的栈实测约 6.1 KB（`-fstack-usage`），任务栈 7 KB；发射缓冲区和接收的半块缓冲放进声码器的 overlay。
+- **频偏**：`RF_MOD_BIAS_CTRL` 的低 16 位是**两个字节**，要各自缩放（`modem_set_mod_scale()`）。0x4343 是 DMR / P25 的电平
+  （+3 = 1944 Hz）；0x2424（`nxdn_tx_dev` 553 / 1024）在另一台电台的鉴频器上和热点自己发的 NXDN48 一样大（`tx_level.py`）。
+  一开始按一个 16 位数缩放成 0x2452，频偏反而**更大**，热点 ±1 符号几乎全错、什么都解不出；我们自己的接收端能收（按 FSW 拟合电平），
+  所以看不出来。
+- 极性是标准的（`p25_phy_tx_xor` 0）。频偏错的时候反相"能收到几帧"，是假象。
+- **结束帧**：MMDVMHost 只在非超帧 SACCH 的帧里认 VCALL / TX_REL；结束帧原来用 LICH 0x50（超帧 SACCH + 两个 FACCH1），
+  热点记成 "transmission lost"，改成和第一帧一样的 0x40 后："received RF end of transmission ... BER: 0.0%"。
+- 热点测试的做法：备份 `/etc/mmdvmhost`，RXFrequency 改成电台的频率，`[NXDN] Enable=1`、`[DMR] Enable=0`、`Duplex=0`，
+  要看调制解调器上报的帧再开 `[Modem] Debug=1`、`Trace=1` 和 `[Log] FileLevel=1`；测完恢复。Pi-Star 的根文件系统会自己变回
+  只读（改之前 `mount -o remount,rw /`）；日志是 UTC 时间，`date` 是本地时间。
+
+## NXDN 的设置（2026-11-17）
+
+- **RAN**（0 – 63）每个信道 / VFO 一个，存在 DMR 色码那个字节（`codeplug_nxdn_ran()`，超出范围当 1；OpenGD77 CPS 写的信道
+  就是它的色码）。接收只收相同 RAN 的（0 收全部，`nxdn_radio_stats.other_ran` 计不同 RAN 的帧），发射用这个 RAN。
+- **个呼**：联系人是个呼（ID ≤ 65535）就发 call type 4；收到发给别的 ID 的个呼不放音。超过 16 位的组号 / 联系人改发组 1。
+- **NXDN ID**（16 位，和 DMR ID 分开注册）：常规设置里设，存在码表自定义数据块 "DT" 6（0x44540006：版本 1、0、ID 小端），
+  CPS 也能改；没设时用 DMR ID（大于 65535 取低 16 位）。
+- 界面：信道详情里色码一项变成 RAN，可以选组列表和联系人，亚音不适用，带宽 6.25kHz；信道、VFO、发射界面显示发射目标和 RAN；
+  底栏 6.25K。CPS：模式 NXDN、RAN、CSV 的 RAN 列、常规页的 NXDN ID。
+- 两台电台实测：RAN 1 的信号，接收端 RAN 1、0 都收，RAN 2 不收；发给接收端 ID 的个呼收，发给别的 ID 的不收。
+- 用写频线测要注意：直接改 `nxdn_radio.c` 的 `tx_ran` 没用，界面每次刷新（比如收到信号）`tx_target_apply()` 都会改回去；
+  要改 VFO 本身（`vfos[0]` 偏移 44 是 RAN）或 `settings.override_tg`（偏移 16，个呼在最高字节放 0x03），再按个键让界面刷新。
+- 还要做：NXDN ID 到呼号的数据库；扫描时不同 RAN 的信号也会停（有信号的标记在 RAN 检查之前）；`nxdn_tx_low_power`
+  只是调试变量。
