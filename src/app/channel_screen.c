@@ -278,6 +278,10 @@ static void load(void)
     int number = zone_channel(position);
 
     channel_screen_channel = number;
+    // where the zone is: the channel shown again after power on (written at power off; not the scan's steps)
+    if ((number != 0) && !scan.active) {
+        codeplug_set_last_used_channel(zone.index, (zone.index >= 0) ? position : number);
+    }
     has_channel = (number != 0) && codeplug_get_channel(number, &channel);
     if (!has_channel) {
         memset(&channel, 0, sizeof(channel));

@@ -155,6 +155,9 @@ bool codeplug_get_zone(int number, codeplug_zone_t *zone);
 
 // The channel last used in a zone: its position in the zone (0 ..); in "all channels" (index -1) its number (1 ..)
 int codeplug_get_last_used_channel(int zone_index);
+// The channel shown in a zone (its position; the "all channels" zone, index -1: the channel number), kept in RAM and
+// written to the codeplug's last used table at power off, as the stock firmware: the radio comes back to it
+void codeplug_set_last_used_channel(int zone_index, int value);
 
 int codeplug_channel_count(void);
 bool codeplug_channel_in_use(int number);

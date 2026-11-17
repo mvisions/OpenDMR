@@ -40,6 +40,7 @@
 #include "task.h"
 #include "flash.h"
 #include "codeplug.h"
+#include "power.h"
 
 #define FLASH_PART_OFFSET (128 * 1024)
 
@@ -79,6 +80,8 @@ static uint8_t channels_in_use[(CHANNEL_BANKS * CHANNELS_PER_BANK) / 8];
 static int channels_per_zone = 16;
 static int channel_total;
 static uint8_t last_used[LAST_USED_SIZE];
+static bool last_used_changed;
+static void last_used_save(void);
 
 uint32_t codeplug_bcd_to_int(uint32_t bcd)
 {
@@ -142,6 +145,8 @@ void codeplug_init(void)
     if (flash_read(ADDR_LAST_USED, tag, sizeof(tag)) && (memcmp(tag, "LUCZ", 4) == 0)) {
         flash_read(ADDR_LAST_USED + 4, last_used, sizeof(last_used));
     }
+    last_used_changed = false;
+    power_off_save_register(last_used_save);
 
     channel_total = 0;
     for (unsigned i = 0; i < sizeof(channels_in_use); i++) {
@@ -227,6 +232,43 @@ int codeplug_get_last_used_channel(int zone_index)
     int number = (last_used[ZONES_MAX] | (last_used[ZONES_MAX + 1] << 8)) + 1;
 
     return codeplug_channel_in_use(number) ? number : CODEPLUG_CHANNELS_MIN;
+}
+
+void codeplug_set_last_used_channel(int zone_index, int value)
+{
+    taskENTER_CRITICAL();
+    if (zone_index >= 0) {
+        int i = (zone_index < ZONES_MAX) ? zone_index : (ZONES_MAX - 1);
+
+        if ((value >= 0) && (value <= 0xFF) && (last_used[i] != (uint8_t)value)) {
+            last_used[i] = (uint8_t)value;
+            last_used_changed = true;
+        }
+    } else if (value >= CODEPLUG_CHANNELS_MIN) {
+        uint16_t stored = (uint16_t)(value - 1);
+
+        if ((last_used[ZONES_MAX] != (uint8_t)stored) || (last_used[ZONES_MAX + 1] != (uint8_t)(stored >> 8))) {
+            last_used[ZONES_MAX] = (uint8_t)stored;
+            last_used[ZONES_MAX + 1] = (uint8_t)(stored >> 8);
+            last_used_changed = true;
+        }
+    }
+    taskEXIT_CRITICAL();
+}
+
+// At power off (power_off_save_register()): the table with its tag, only when something changed
+static void last_used_save(void)
+{
+    uint8_t data[4 + LAST_USED_SIZE];
+
+    if (!last_used_changed) {
+        return;
+    }
+    memcpy(data, "LUCZ", 4);
+    memcpy(&data[4], last_used, sizeof(last_used));
+    if (flash_write(ADDR_LAST_USED, data, sizeof(data))) {
+        last_used_changed = false;
+    }
 }
 
 int codeplug_channel_count(void)
