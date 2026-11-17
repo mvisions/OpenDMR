@@ -279,3 +279,12 @@ void qso_panel_draw_p25(const p25_call_t *call, const char *channel_name, const 
     snprintf(nac_text, sizeof(nac_text), "NAC %03X", call->nac);
     draw(&shown, "P25", NULL, NULL, channel_name, power, nac_text);
 }
+
+void qso_panel_draw_nxdn(const nxdn_call_t *call, const char *channel_name, const char *power)
+{
+    dmr_call_t shown = {.source = call->src, .tg_or_pc = nxdn_call_tg_or_pc(call)};
+    char ran_text[12];
+
+    snprintf(ran_text, sizeof(ran_text), "RAN %u", (unsigned)call->ran);
+    draw(&shown, "NXDN", NULL, NULL, channel_name, power, ran_text);
+}

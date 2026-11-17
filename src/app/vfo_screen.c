@@ -416,7 +416,8 @@ static void scan_range(uint32_t *low, uint32_t *high)
 
 static scan_kind_t scan_kind(void)
 {
-    return (vfo()->mode == CODEPLUG_MODE_DMR) ? SCAN_DMR : (vfo()->mode == CODEPLUG_MODE_P25) ? SCAN_P25 : SCAN_ANALOG;
+    return (vfo()->mode == CODEPLUG_MODE_DMR) ? SCAN_DMR : (vfo()->mode == CODEPLUG_MODE_P25) ? SCAN_P25
+         : (vfo()->mode == CODEPLUG_MODE_NXDN) ? SCAN_NXDN : SCAN_ANALOG;
 }
 
 static uint32_t scan_dwell(void)
@@ -943,6 +944,7 @@ static void draw(void)
     char buffer[40];
     dmr_call_t call;
     p25_call_t p25;
+    nxdn_call_t nxdn;
 
     if ((v->mode == CODEPLUG_MODE_DMR) && !digit_entry_active(&entry) && dmr_call(&call)) {
         snprintf(buffer, sizeof(buffer), "VFO %c", (vfo_screen_current() == 0) ? 'A' : 'B');
@@ -952,6 +954,11 @@ static void draw(void)
     if ((v->mode == CODEPLUG_MODE_P25) && !digit_entry_active(&entry) && p25_radio_call(&p25) && (p25.src != 0)) {
         snprintf(buffer, sizeof(buffer), "VFO %c", (vfo_screen_current() == 0) ? 'A' : 'B');
         qso_panel_draw_p25(&p25, buffer, power_text(v));
+        return;
+    }
+    if ((v->mode == CODEPLUG_MODE_NXDN) && !digit_entry_active(&entry) && nxdn_radio_call(&nxdn) && (nxdn.src != 0)) {
+        snprintf(buffer, sizeof(buffer), "VFO %c", (vfo_screen_current() == 0) ? 'A' : 'B');
+        qso_panel_draw_nxdn(&nxdn, buffer, power_text(v));
         return;
     }
     draw_status_bar(v);
@@ -992,6 +999,8 @@ static void draw(void)
             icons_draw(WIDGET_MARGIN, TONE_Y + 3, (pc ? ICONS_CONTACT : ICONS_TALKGROUP), THEME_COLOUR_TEXT_LABEL);
             draw_text(VALUE_X, TONE_Y, target.name, &font_roboto20, FONT_ALIGN_LEFT, THEME_COLOUR_TEXT);
         }
+    } else if (v->mode == CODEPLUG_MODE_NXDN) {
+        // NXDN: receive only, any RAN for now: nothing to show under the frequencies
     } else if (v->mode == CODEPLUG_MODE_P25) {
         // P25: the talk group transmitted to (tx_target_apply()), the NAC on its line, right
         icons_draw(WIDGET_MARGIN, TONE_Y + 3, ICONS_TALKGROUP, THEME_COLOUR_TEXT_LABEL);
@@ -1027,6 +1036,9 @@ static void draw(void)
     bottom.mode = codeplug_mode_name(v->mode);
     bottom.item1 = power_text(v);
     bottom.item2 = ((v->mode == CODEPLUG_MODE_FM) && (v->flag4 & FLAG4_BANDWIDTH_25K)) ? "25K" : "12.5K";
+    if (v->mode == CODEPLUG_MODE_NXDN) {
+        bottom.item2 = "6.25K"; // NXDN48
+    }
     if (codeplug_mode_is_ssb(v->mode)) {
         bottom.item2 = "3K";
     }

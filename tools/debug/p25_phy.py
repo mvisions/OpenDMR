@@ -16,6 +16,7 @@
       the captured stream through p25/bin/p25_cli.exe, its IMBE frames against the ones sent
 
 --p25: the sync detection on the P25 frame sync (else the DMR syncs as the channel set them up).
+--sync HEX: any 48-bit sync pattern instead (nxdn/README.md: NXDN48 at the modem's 4800 symbols/s).
 The file: per block, us (u32 LE), RX_TYPE_INFO (u32 LE), 36 bytes as the modem gave them.
 """
 import argparse
@@ -170,7 +171,17 @@ def capture(args):
 def capture_once(args, sym, radio):
     count_addr = sym.resolve('p25_phy_count')
     buf_addr = sym.resolve('p25_phy_buf')
-    r = radio.call(sym.resolve('p25_phy_capture'), [1 if args.p25 else 0, args.blocks])
+    if args.gain is not None:  # RF_MODE[23:16], the demodulated amplitude x / 16 (0x26 in DMR)
+        g = radio.value_read(0x11000104, 4)
+        radio.value_write(0x11000104, 4, (g & ~0xFF0000) | (int(args.gain, 16) << 16))
+    if args.threshold is not None:  # THRESHOLD_VALUE: the sync detection thresholds
+        radio.value_write(0x11000120, 4, int(args.threshold, 16))
+    if args.sync is not None:  # any 48-bit sync: into the MS and BS sync registers, kept by the capture (no --p25)
+        v = int(args.sync, 16)
+        for h, l in ((0x1100013C, 0x11000140), (0x11000144, 0x11000148)):  # RECV_MS_SYNC_H / L, RECV_BS_SYNC_H / L
+            radio.value_write(h, 4, 0x80000000 | (v >> 24))
+            radio.value_write(l, 4, v & 0xFFFFFF)
+    r = radio.call(sym.resolve('p25_phy_capture'), [1 if args.p25 and args.sync is None else 0, args.blocks])
     if r != 0:
         raise SystemExit('p25_phy_capture: %d (already running?)' % r)
     end = time.time() + args.blocks * 0.03 + 3
@@ -246,6 +257,9 @@ def main():
     c.add_argument('--elf', default=ELF)
     c.add_argument('--blocks', type=int, default=64)
     c.add_argument('--p25', action='store_true')
+    c.add_argument('--sync', help='48-bit sync, hex (e.g. NXDN48 seen at 4800 symbols/s: A0A0AA00A0A0)')
+    c.add_argument('--gain', help='RF_MODE[23:16] for the capture, hex (DMR 26; NXDN48 about 36)')
+    c.add_argument('--threshold', help='THRESHOLD_VALUE for the capture, hex (DMR 0978786F)')
     c.add_argument('--out', default='phy.bin')
     c.add_argument('--dibits')
     c.add_argument('--wait', type=float, default=0, help='capture again until a sync is found, up to this many s')

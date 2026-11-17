@@ -32,6 +32,7 @@
 #include <stdbool.h>
 #include "dmr.h"
 #include "p25_radio.h"
+#include "nxdn_radio.h"
 
 // The DMR caller on the channel and VFO screens (docs/ui-design.md 5.3, uiUtilities.c renderQSODataDM32()): the channel
 // (or VFO) name and the caller's ID, the callsign large (the ID when not known), the name, the city and state, the
@@ -40,5 +41,7 @@
 void qso_panel_draw(const dmr_call_t *call, const char *channel_name, uint8_t colour_code, const char *power);
 // A P25 caller the same way: "P25" in the bottom bar, the NAC of the call in the status bar (no timeslot)
 void qso_panel_draw_p25(const p25_call_t *call, const char *channel_name, const char *power);
+// An NXDN caller: "NXDN" in the bottom bar, the RAN of the call in the status bar
+void qso_panel_draw_nxdn(const nxdn_call_t *call, const char *channel_name, const char *power);
 
 #endif

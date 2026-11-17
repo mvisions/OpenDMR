@@ -33,7 +33,7 @@ CFLAGS  += -DRX_CAPTURE
 endif
 ASFLAGS := $(CPU) $(addprefix -I,$(INCDIRS)) -MMD -MP
 LDFLAGS := $(CPU) -nostartfiles -Wl,--gc-sections -Wl,--undefined=vocoder_bench -Wl,--undefined=serial_update_marker \
-           -Wl,--undefined=p25_phy_capture -Wl,--undefined=p25_phy_stop -Wl,--undefined=p25_phy_tx_test -Wl,--undefined=imbe_enc_test -Wl,-Map,$(TARGET).map -T ckcpu.ld
+           -Wl,--undefined=p25_phy_capture -Wl,--undefined=p25_phy_stop -Wl,--undefined=p25_phy_tx_test -Wl,--undefined=nxdn_af_capture -Wl,--undefined=imbe_enc_test -Wl,-Map,$(TARGET).map -T ckcpu.ld
 LIBS    := -lm -lc -lgcc
 
 # Layers, see docs/architecture.md

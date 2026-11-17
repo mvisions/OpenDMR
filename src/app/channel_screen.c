@@ -287,7 +287,8 @@ static void load(void)
 
 static scan_kind_t scan_kind(void)
 {
-    return (channel.mode == CODEPLUG_MODE_DMR) ? SCAN_DMR : (channel.mode == CODEPLUG_MODE_P25) ? SCAN_P25 : SCAN_ANALOG;
+    return (channel.mode == CODEPLUG_MODE_DMR) ? SCAN_DMR : (channel.mode == CODEPLUG_MODE_P25) ? SCAN_P25
+         : (channel.mode == CODEPLUG_MODE_NXDN) ? SCAN_NXDN : SCAN_ANALOG;
 }
 
 static uint32_t scan_dwell(void)
@@ -779,6 +780,7 @@ static void draw(void)
     char squelch[24];
     dmr_call_t call;
     p25_call_t p25;
+    nxdn_call_t nxdn;
 
     if ((channel.mode == CODEPLUG_MODE_DMR) && dmr_call(&call)) {
         format_names(zone_text, sizeof(zone_text), name, sizeof(name));
@@ -788,6 +790,11 @@ static void draw(void)
     if ((channel.mode == CODEPLUG_MODE_P25) && p25_radio_call(&p25) && (p25.src != 0)) {
         format_names(zone_text, sizeof(zone_text), name, sizeof(name));
         qso_panel_draw_p25(&p25, name, power_text());
+        return;
+    }
+    if ((channel.mode == CODEPLUG_MODE_NXDN) && nxdn_radio_call(&nxdn) && (nxdn.src != 0)) {
+        format_names(zone_text, sizeof(zone_text), name, sizeof(name));
+        qso_panel_draw_nxdn(&nxdn, name, power_text());
         return;
     }
     meter.active = true;
@@ -848,6 +855,10 @@ static void draw(void)
         }
         bottom.mode = "P25";
         bottom.item2 = "12.5K";
+    } else if (channel.mode == CODEPLUG_MODE_NXDN) {
+        // NXDN48: receive only, any RAN for now (the RAN of a call shows in its panel)
+        bottom.mode = "NXDN";
+        bottom.item2 = "6.25K";
     } else {
         uint16_t tone = (channel.rx_tone != CODEPLUG_CSS_NONE) ? channel.rx_tone : channel.tx_tone;
 

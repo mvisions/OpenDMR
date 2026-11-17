@@ -2,3 +2,4 @@ toolchain/
 tools/fonts/build/
 __pycache__/
 dist/
+nxdn/data/

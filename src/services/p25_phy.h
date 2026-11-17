@@ -77,6 +77,11 @@ void p25_phy_rx_slot_isr(void);
 // way, p25_phy.c). Returns 0, -1 if the physical layer is busy. Not keyed through radio.c: the radio task may switch
 // the RF meanwhile; p25_radio_transmit() through radio_transmit() (the PTT) is the transmission to test.
 int p25_phy_tx_test(int delay_ms, int ms, int write_mode);
+// write_mode 1: the loop mode, p25_phy_tx_loop's first p25_phy_tx_loop_len dibits (0 - 3, one a byte) sent again and
+// again for ms instead (NXDN96 experiments: nxdn/py/radio_tx.py writes them over the cable)
+#define P25_PHY_TX_LOOP 768
+extern uint8_t p25_phy_tx_loop[P25_PHY_TX_LOOP];
+extern volatile uint32_t p25_phy_tx_loop_len;
 bool p25_phy_tx_active(void);
 // The modem's 30 ms transmit timeslot interrupt while transmitting (dmr.c timeslot_tx_isr())
 void p25_phy_tx_isr(void);
@@ -112,5 +117,16 @@ typedef struct {
 } p25_phy_txlog_t;
 extern p25_phy_txlog_t p25_phy_txlog[P25_PHY_TXLOG];
 extern volatile uint32_t p25_phy_txlog_n;
+
+// The NXDN receiver (nxdn_radio.c): the modem in FM recording its AF input (8 kHz) all the time, the DMR handlers
+// standing aside; nxdn_fm_read(): the next half (256 samples) once the modem finished it (false: not yet)
+bool nxdn_fm_start(void);
+void nxdn_fm_stop(void);
+bool nxdn_fm_read(int16_t out[256]);
+extern volatile uint32_t nxdn_fm_rewrites;
+
+// NXDN experiments: the FM receive recording (the AF input at 8 kHz) into p25_phy_buf (p25_phy.c)
+int nxdn_af_capture(int halves, uint32_t fm_bandwidth, int work_mode);
+extern uint8_t nxdn_af_sw_log[64];
 
 #endif
