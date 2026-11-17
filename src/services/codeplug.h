@@ -75,7 +75,8 @@ static inline bool codeplug_mode_is_ssb(uint8_t mode)
 // AM, USB and LSB are receive only: the FD6818 modulates FM only
 static inline bool codeplug_mode_can_transmit(uint8_t mode)
 {
-    return (mode == CODEPLUG_MODE_FM) || (mode == CODEPLUG_MODE_DMR) || (mode == CODEPLUG_MODE_P25);
+    return (mode == CODEPLUG_MODE_FM) || (mode == CODEPLUG_MODE_DMR) || (mode == CODEPLUG_MODE_P25) ||
+           (mode == CODEPLUG_MODE_NXDN);
 }
 
 const char *codeplug_mode_name(uint8_t mode);  // "FM", "DMR", "AM", "USB", "LSB", "P25", "NXDN"

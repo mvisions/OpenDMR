@@ -104,4 +104,33 @@ typedef struct {
 } nxdn_sacch_super;
 bool nxdn_sacch_add(nxdn_sacch_super *s, const nxdn_frame_t *f, uint8_t msg[9]);
 
+/* ---- transmit (TS 1-A 4.4 - 4.6; nxdn/py/tx.py the same in Python): symbols as dibits, +3 1, +1 0, -1 2, -3 3 ---- */
+
+#define NXDN_PREAMBLE_SYMS 12   // 0x5775FD, before the first frame only
+#define NXDN_LICH_FIRST    0x40 // RDCH, non-superframe SACCH, two FACCH1, SU: the VCALL in both
+#define NXDN_LICH_VOICE    0x56 // RDCH, superframe SACCH, VCH only, SU
+// the last frame as the first, the TX_REL in its place: MMDVMHost takes a VCALL / TX_REL from frames with the single
+// SACCH only (with 0x50, superframe SACCH and two FACCH1, it saw no end: "transmission lost", 2026-11-17)
+
+void nxdn_tx_preamble(uint8_t out[NXDN_PREAMBLE_SYMS]);
+// a frame: the FSW, then LICH, the SACCH (SR + 18 bits) and the 144 middle symbols, scrambled
+void nxdn_tx_frame(uint8_t lich, uint8_t sr, uint32_t sacch18, const uint8_t middle[144], uint8_t out[NXDN_FRAME_SYMS]);
+void nxdn_tx_facch1(const uint8_t msg[10], uint8_t out[72]); // a message of 10 bytes -> 72 symbols
+void nxdn_tx_vch(const uint8_t ambe[9], uint8_t out[36]);     // an AMBE+2 frame (DMR's bit order) -> 36 symbols
+// VCALL (6.4.1.1) and TX_REL (6.4.1.6), 10 bytes (zeros after): call type 1 group, mode 0 (4800 EHR), clear
+void nxdn_msg_vcall(uint8_t msg[10], uint16_t src, uint16_t dst);
+void nxdn_msg_tx_rel(uint8_t msg[10], uint16_t src, uint16_t dst);
+
+// A whole call as it goes on: nxdn_tx_begin() the preamble and the first frame, nxdn_tx_voice() a frame of 4 voice
+// frames (its SACCH a quarter of the VCALL), nxdn_tx_end() the last frame (TX_REL); each returns the symbols written
+typedef struct {
+    uint16_t src, dst;
+    uint8_t ran;
+    uint32_t frames; // voice frames sent: the SACCH part is frames % 4
+    uint8_t vcall[10];
+} nxdn_tx;
+int nxdn_tx_begin(nxdn_tx *t, uint16_t src, uint16_t dst, uint8_t ran, uint8_t *out); // 12 + 192 symbols
+int nxdn_tx_voice(nxdn_tx *t, const uint8_t ambe[4][9], uint8_t *out);                // 192
+int nxdn_tx_end(nxdn_tx *t, uint8_t *out);                                           // 192
+
 #endif

@@ -35,7 +35,8 @@
 // The NXDN48 receiver (nxdn/README.md): the HR_C7000's FM recording (its AF input, the FD6818's discriminator with
 // the DMR settings) read every 32 ms, demodulated and decoded in software (nxdn_core.c), the voice through our AMBE+2
 // vocoder to the prompt path (the baseband stays in FM). Started by radio.c on an NXDN channel, once the RF and the
-// modem are set up as for DMR. Receive only.
+// modem are set up as for DMR. Transmit: the mic through our AMBE+2 encoder, the symbols through the P25 physical
+// layer's transmit (nxdn_radio.c).
 
 typedef struct {
     bool active;   // a call is being received
@@ -50,6 +51,12 @@ void nxdn_radio_stop(void);
 bool nxdn_radio_call(nxdn_call_t *out);        // the call now (false: none)
 bool nxdn_radio_heard_within(uint32_t ms);     // a frame decoded lately (scan)
 uint32_t nxdn_call_tg_or_pc(const nxdn_call_t *c); // as last heard keeps it
+
+// Transmit: a group call from src to dst on the RAN (tx_target.c sets them); the PTT on / off, transmitting until the
+// last frame is sent (nxdn_radio_transmitting())
+void nxdn_radio_set_target(uint8_t ran, uint16_t src, uint16_t dst);
+void nxdn_radio_transmit(bool on);
+bool nxdn_radio_transmitting(void);
 
 // counters, read over the cable
 typedef struct {

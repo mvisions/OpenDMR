@@ -35,6 +35,11 @@
  * small task feeds them into the prompt FIFO (8 kHz, the path the beeps take), which plays while the modem stays in FM.
  * The caller and the group come from the SACCH superframe (VCALL) or a FACCH1; a TX_REL or no voice for CALL_TIMEOUT
  * ends the call. The demodulator's state and the voice queue live in the vocoder's overlay RAM after its own.
+ *
+ * Transmit (transmit(), the PTT): the recording stopped, the mic's 20 ms frames through our AMBE+2 encoder, 4 a frame
+ * (nxdn_core.c: a lead, the preamble, a first frame with the VCALL, voice frames, a last with the TX_REL), each NXDN48
+ * symbol sent twice through the P25 physical layer's transmit FIFO (4800 symbols/s), the modem's 4FSK level scaled
+ * down to NXDN48's deviation meanwhile (modem_set_mod_scale()); then the recording again.
  */
 
 #include <string.h>
@@ -54,6 +59,7 @@
 #include "last_heard.h"
 #include "dmr_ids.h"
 #include "flash.h"
+#include "dmr_compat.h"
 
 #define PCM_FRAMES     16   // 320 ms of decoded voice
 #define PLAY_START     6    // frames queued before the playback starts: they come 4 at a time every 80 ms, a frame
@@ -63,6 +69,7 @@
 #define POLL_MS        4    // the recording looked at this often (a half is 32 ms)
 #define TAP_SAMPLES    2048 // the last samples as recorded, for tools over the cable (256 ms)
 #define VCH_LOG        256  // the last voice frames received, for tools over the cable (5 s)
+#define TX_LEAD_MAX    240  // symbols of lead at most (100 ms)
 
 #define OVERLAY_BSS __attribute__((section(".vocoder_bss"))) // zeroed by the vocoder's load, ours after its own
 
@@ -99,11 +106,27 @@ uint8_t nxdn_vch_log[VCH_LOG][9] OVERLAY_BSS; // the voice frames as received (r
 volatile uint32_t nxdn_vch_log_n;              // nxdn/py/vch_check.py against the frames sent
 
 static StaticTask_t task_tcb, feed_tcb;
-static StackType_t task_stack[1280]; // 5 KB: the frame decoding and our AMBE decoder
+static StackType_t task_stack[1792]; // 7 KB: the frame decoding, our AMBE decoder; the encoder (transmit) ~6.5 KB
 static StackType_t feed_stack[192];
 static TaskHandle_t task, feeder;
 static volatile bool running;
 static volatile bool busy; // the task is using the overlay
+
+/* transmit: the PTT (nxdn_radio_transmit()), where to (nxdn_radio_set_target()), settings and counters over the cable */
+static volatile bool tx_want, tx_busy;
+static volatile bool tx_on; // transmitting: the playback off
+static volatile uint16_t tx_src, tx_dst = 1;
+static volatile uint8_t tx_ran = 1;
+static nxdn_tx tx OVERLAY_BSS;
+static uint8_t tx_ambe[4][9] OVERLAY_BSS;
+static uint8_t tx_syms[TX_LEAD_MAX + NXDN_PREAMBLE_SYMS + NXDN_FRAME_SYMS] OVERLAY_BSS;
+static uint8_t tx_dibits[2 * NXDN_FRAME_SYMS] OVERLAY_BSS;
+// the deviation: the modem's 4FSK level (+3 = 1944 Hz, as DMR; nxdn/README.md) times this / 1024: NXDN48's 1050 Hz
+volatile uint32_t nxdn_tx_dev = 553;
+volatile uint32_t nxdn_tx_lead = 144;   // symbols (+3, -3 ...) before the preamble: the first voice frame's time
+volatile uint32_t nxdn_tx_low_power;    // not 0: 50 mW (tests with the radios side by side)
+volatile uint32_t nxdn_tx_source;       // 0 the mic; 1 the AMBE frames of the flash test (nxdn_play_address)
+volatile uint32_t nxdn_tx_stats[4];     // calls, frames, encoder frames, underruns (the last call's)
 
 static nxdn_call_t call;
 static TickType_t last_voice;
@@ -280,7 +303,7 @@ static void feed_task(void *arg)
         vTaskDelay(1);
         int state = play_state;
         if (state == 0) {
-            if (running && play_wanted) {
+            if (running && !tx_on && play_wanted) {
                 play_on(true);
                 play_since = xTaskGetTickCount();
                 play_state = 1;
@@ -299,7 +322,8 @@ static void feed_task(void *arg)
         }
         // playing: a block a tick while the FIFO has room (as sound.c: several at once overran it, its full flag
         // comes late, and samples were lost: the voice shook); out of voice: silence while the call goes on, else the end
-        for (int blocks = 0; running && (blocks < (int)nxdn_feed_blocks) && !modem_beep_fifo_full(); blocks++) {
+        for (int blocks = 0; running && !tx_on && (blocks < (int)nxdn_feed_blocks) && !modem_beep_fifo_full();
+             blocks++) {
             if (pcm_in == pcm_out) {
                 if (!play_wanted) {
                     break;
@@ -326,10 +350,10 @@ static void feed_task(void *arg)
                 pcm_out++;
             }
         }
-        if (!running || (!play_wanted && (pcm_in == pcm_out))) {
+        if (!running || tx_on || (!play_wanted && (pcm_in == pcm_out))) {
             play_on(false);
             pcm_pos = 0;
-            if (!running) {
+            if (!running || tx_on) {
                 pcm_out = pcm_in;
             }
             play_state = 0;
@@ -337,17 +361,147 @@ static void feed_task(void *arg)
     }
 }
 
+/* ---- transmit ---- */
+
+// NXDN48 symbols (dibits) into the physical layer's FIFO, each twice (it sends 4800 a second)
+static void put(const uint8_t *syms, int n)
+{
+    while (n > 0) {
+        int k = (n > NXDN_FRAME_SYMS) ? NXDN_FRAME_SYMS : n;
+        for (int i = 0; i < k; i++) {
+            tx_dibits[2 * i] = tx_dibits[2 * i + 1] = syms[i];
+        }
+        p25_phy_tx_put(tx_dibits, 2 * k);
+        syms += k;
+        n -= k;
+    }
+}
+
+/* A transmission while tx_want (the PTT) stays set: the playback and the recording off, the lead, the preamble and
+   the first frame into the FIFO and the transmitter keyed (the first voice frame comes 4 mic frames and their
+   encoding later, ~95 ms: the lead and the first frame cover that, the interrupt taking a block 30 ms ahead); then a
+   frame for every 4 mic frames. The PTT released: the frame finished with silence, the last frame (TX_REL); once
+   sent, back to receive. */
+static void transmit(void)
+{
+    tx_busy = true;
+    if (call.active) {
+        call_end();
+    }
+    tx_on = true;
+    while (play_state != 0) { // the feeder off the prompt path
+        vTaskDelay(1);
+    }
+    nxdn_fm_stop();
+    vocoderReset();
+    sound_mic_start();
+    p25_phy_tx_reset();
+    modem_set_mod_scale(nxdn_tx_dev);
+    nxdn_tx_stats[0]++;
+
+    uint32_t lead = (nxdn_tx_lead > TX_LEAD_MAX) ? TX_LEAD_MAX : nxdn_tx_lead;
+    for (uint32_t i = 0; i < lead; i++) {
+        tx_syms[i] = (i & 1) ? 3 : 1; // +3, -3
+    }
+    int n = (int)lead + nxdn_tx_begin(&tx, tx_src, tx_dst, tx_ran, &tx_syms[lead]);
+    put(tx_syms, n);
+    bool started = (p25_phy_tx_begin(nxdn_tx_low_power != 0) == 0);
+    int16_t pcm[160];
+    int halves = 0, nf = 0;
+    uint32_t play = 0;
+    bool ending = false;
+    while (started) {
+        if (!tx_want) {
+            ending = true;
+        }
+        if (ending && (nf == 0)) {
+            break;
+        }
+        bool frame = false;
+        if (ending) {
+            memset(pcm, 0, sizeof(pcm)); // silence to the end of the frame of 4
+            frame = true;
+        } else if (sound_mic_take(&pcm[80 * halves])) {
+            if (++halves == 2) {
+                halves = 0;
+                frame = true;
+            }
+        }
+        if (!frame) {
+            vTaskDelay(pdMS_TO_TICKS(2));
+            continue;
+        }
+        if ((nxdn_tx_source == 1) && nxdn_play_frames && !ending) {
+            if (play >= nxdn_play_frames) {
+                play = 0;
+            }
+            flash_read(nxdn_play_address + (9 * play++), tx_ambe[nf], 9);
+        } else {
+            vocoderEncodeFrame(pcm, tx_ambe[nf]);
+        }
+        nxdn_tx_stats[2]++;
+        if (++nf < 4) {
+            continue;
+        }
+        nf = 0;
+        put(tx_syms, nxdn_tx_voice(&tx, (const uint8_t(*)[9])tx_ambe, tx_syms));
+        nxdn_tx_stats[1]++;
+    }
+    if (started) {
+        put(tx_syms, nxdn_tx_end(&tx, tx_syms));
+        p25_phy_tx_pad(); // the last frame's block whole: sent
+        while ((p25_phy_tx_level() >= P25_PHY_BLOCK_BYTES * 4) && (p25_phy_tx_underrun < 10)) {
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+        vTaskDelay(pdMS_TO_TICKS(60)); // the last blocks out of the modem
+        p25_phy_tx_end();
+        nxdn_tx_stats[3] = p25_phy_tx_underrun;
+    }
+    modem_set_mod_scale(MODEM_MOD_SCALE_ONE);
+    soundStopMicCapture();
+
+    // back to receive
+    nxdn_fm_start();
+    nxdn_rx_init(&rx, on_frame, NULL);
+    memset(&super, 0, sizeof(super));
+    vocoderReset();
+    pcm_in = pcm_out = 0;
+    tx_on = false;
+    tx_busy = false;
+}
+
+void nxdn_radio_set_target(uint8_t ran, uint16_t src, uint16_t dst)
+{
+    tx_ran = ran & 0x3F;
+    tx_src = src;
+    tx_dst = dst;
+}
+
+void nxdn_radio_transmit(bool on)
+{
+    tx_want = on;
+}
+
+bool nxdn_radio_transmitting(void)
+{
+    return tx_want || tx_busy;
+}
+
 /* ---- the receive task ---- */
 
 static void task_main(void *arg)
 {
-    int16_t half[256];
+    static int16_t half[256] OVERLAY_BSS; // off the stack: the encoder needs it (transmit())
     TickType_t last_half = 0;
 
     (void)arg;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(POLL_MS));
         busy = true;
+        if (running && tx_want) {
+            transmit();
+            last_half = 0;
+        }
         if (!running) {
             last_half = 0;
             busy = false;

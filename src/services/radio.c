@@ -888,6 +888,22 @@ static void p25_transmit_check(void)
     }
 }
 
+// NXDN (nxdn_radio.c): the same as P25
+static void nxdn_transmit_check(void)
+{
+    if (tx_wanted && !transmitting) {
+        transmitting = true;
+        nxdn_radio_transmit(true);
+        post_signal();
+    } else if (!tx_wanted && transmitting) {
+        nxdn_radio_transmit(false);
+        if (!nxdn_radio_transmitting()) {
+            transmitting = false;
+            post_signal();
+        }
+    }
+}
+
 // The PTT: the engine asked to transmit; released: it ends its transmission, then the radio is free again
 static void dmr_transmit_check(void)
 {
@@ -1254,7 +1270,7 @@ static void RAM_CODE radio_task(void *arg)
             aprs_transmit();
         }
         if (nxdn_on) {
-            // NXDN: receive only (codeplug_mode_can_transmit()), no DMR transmission from its engine underneath
+            nxdn_transmit_check(); // not the DMR engine underneath
         } else if (p25_on) {
             p25_transmit_check();
         } else if (dmr_on) {

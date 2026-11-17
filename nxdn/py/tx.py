@@ -7,7 +7,7 @@ Frames (TS 1-A 4.4.2.2, LICH Table 5.2-2, SU -> CR/SU):
   preamble (24 bits) only before the first frame,
   1 frame   non-superframe SACCH, two FACCH1 (LICH 1000000): VCALL in both FACCH1
   n frames  superframe SACCH, VCH only (LICH 1010110): 4 VCH each, VCALL over 4 SACCHs (SR 1/4 .. 4/4)
-  1 frame   superframe SACCH, two FACCH1 (LICH 1010000): TX_REL in both
+  1 frame   non-superframe SACCH, two FACCH1 (LICH 1000000): TX_REL in both (MMDVMHost ends a call on that only)
 Modulation: impulses at the symbol levels -> root raised cosine (alpha 0.2) and a one-symbol hold (P(f), sinc) ->
 FM (+3 = 1050 Hz at 2400 symbols/s, 2400 Hz at 4800) -> 48 kHz I/Q.
 """
@@ -28,7 +28,7 @@ FSW = [-3, 1, -3, 3, -3, -3, 3, 3, -1, 3]
 PREAMBLE = 0x5775FD          # Table 4.4-1: 24 bits
 LICH_FIRST = 0b1000000       # non-superframe SACCH, two FACCH1, SU
 LICH_VOICE = 0b1010110       # superframe SACCH, VCH only, SU
-LICH_LAST = 0b1010000        # superframe SACCH, two FACCH1, SU
+LICH_LAST = 0b1000000        # as the first: non-superframe SACCH, two FACCH1, SU
 
 
 def lich_symbols(value):
@@ -70,9 +70,7 @@ def call(voice, src, dst, ran, baud):
             mid += vch_symbols(f)
         syms += frame(LICH_VOICE, l2.sacch_encode(sr, vc72[18 * part:18 * part + 18]), mid)
         n += 1
-    part = n % 4
-    sr = ((3 - part) << 6) | (ran & 0x3F)
-    syms += frame(LICH_LAST, l2.sacch_encode(sr, vc72[18 * part:18 * part + 18]),
+    syms += frame(LICH_LAST, l2.sacch_encode(ran & 0x3F, l2.bits_of(rel)[:18]),
                   l2.facch1_encode(rel) + l2.facch1_encode(rel))
     return np.array(syms, float), n
 

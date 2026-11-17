@@ -40,6 +40,7 @@
 #include "dmr.h"
 #include "tx_target.h"
 #include "p25_radio.h"
+#include "nxdn_radio.h"
 
 #define TS_MASK           0x03
 #define TS_CONTACT_SHIFT  6    // tsSetContactHasBeenOverriden(): a bit for each source after the 3 x 2 bits
@@ -132,6 +133,20 @@ void tx_target_apply(codeplug_channel_t *channel, tx_target_t *target)
             snprintf(target->name, sizeof(target->name), "%s 1", text(TEXT_TG));
         }
         p25_radio_set_target(codeplug_p25_nac(channel), (uint16_t)target->id);
+        return;
+    }
+    if (channel->mode == CODEPLUG_MODE_NXDN) {
+        // NXDN: as P25, group calls of 16 bits; the RAN the channel's colour code; our ID's low 16 bits (an NXDN ID
+        // has 16: a DMR ID over 65535 does not fit)
+        tx_target_get(channel, target);
+        bool group = ((target->id >> 24) != TX_TARGET_PC_FLAG) && ((target->id & CODEPLUG_CONTACT_ID_MAX) <= 0xFFFF);
+        if (!group || (target->id == 0)) {
+            memset(target, 0, sizeof(*target));
+            target->id = 1;
+            target->timeslot = 1;
+            snprintf(target->name, sizeof(target->name), "%s 1", text(TEXT_TG));
+        }
+        nxdn_radio_set_target(channel->tx_colour, (uint16_t)codeplug_get_dmr_id(), (uint16_t)target->id);
         return;
     }
     if (channel->mode != CODEPLUG_MODE_DMR) {

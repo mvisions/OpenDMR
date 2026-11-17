@@ -637,3 +637,180 @@ bool nxdn_sacch_add(nxdn_sacch_super *s, const nxdn_frame_t *f, uint8_t msg[9])
     s->got = 0;
     return true;
 }
+
+/* ---- transmit (TS 1-A 4.4 - 4.6; nxdn/py/tx.py) ---- */
+
+static const uint8_t fsw_dibits[10] = {3, 0, 3, 1, 3, 3, 1, 1, 2, 1}; // -3 +1 -3 +3 -3 -3 +3 +3 -1 +3
+
+void nxdn_tx_preamble(uint8_t out[NXDN_PREAMBLE_SYMS])
+{
+    for (int i = 0; i < NXDN_PREAMBLE_SYMS; i++) {
+        out[i] = (uint8_t)((0x5775FDu >> (22 - 2 * i)) & 3u);
+    }
+}
+
+// CRC check bits appended after n bits (the register all ones at the start)
+static void crc_append(uint8_t *bits, int n, int width, uint32_t poly)
+{
+    uint32_t mask = (1u << width) - 1, reg = mask, top = 1u << (width - 1);
+    for (int i = 0; i < n; i++) {
+        uint32_t fb = ((reg & top) ? 1u : 0u) ^ bits[i];
+        reg = (reg << 1) & mask;
+        if (fb) {
+            reg ^= poly;
+        }
+    }
+    for (int i = 0; i < width; i++) {
+        bits[n + i] = (uint8_t)((reg >> (width - 1 - i)) & 1u);
+    }
+}
+
+// data bits (n, CRC and the tail added here) -> convolutional code, punctured, interleaved (rows x cols written in
+// rows, sent in columns) -> dibits
+static void encode(uint8_t *bits, int n, int width, uint32_t poly, const uint8_t *keep, int keep_n, int rows, int cols,
+                   uint8_t *out)
+{
+    uint8_t sent[144], inter[144];
+    int ninputs = n + width + 4;
+    crc_append(bits, n, width, poly);
+    memset(&bits[n + width], 0, 4);
+    int s = 0, k = 0;
+    for (int i = 0; i < ninputs; i++) {
+        int reg = (bits[i] << 4) | s;
+        uint8_t c[2] = {(uint8_t)parity5(reg & G1), (uint8_t)parity5(reg & G2)};
+        for (int j = 0; j < 2; j++) {
+            if (keep[(2 * i + j) % keep_n]) {
+                sent[k++] = c[j];
+            }
+        }
+        s = reg >> 1;
+    }
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            inter[c * rows + r] = sent[r * cols + c];
+        }
+    }
+    for (int i = 0; i < k / 2; i++) {
+        out[i] = (uint8_t)((inter[2 * i] << 1) | inter[2 * i + 1]);
+    }
+}
+
+static void sacch_encode(uint8_t sr, uint32_t data18, uint8_t out[SACCH_SYMS])
+{
+    uint8_t bits[36];
+    for (int i = 0; i < 8; i++) {
+        bits[i] = (uint8_t)((sr >> (7 - i)) & 1u);
+    }
+    for (int i = 0; i < 18; i++) {
+        bits[8 + i] = (uint8_t)((data18 >> (17 - i)) & 1u);
+    }
+    encode(bits, 26, 6, 0x27, SACCH_KEEP, 12, 5, 12, out);
+}
+
+void nxdn_tx_facch1(const uint8_t msg[10], uint8_t out[72])
+{
+    uint8_t bits[96];
+    for (int i = 0; i < 80; i++) {
+        bits[i] = (uint8_t)((msg[i >> 3] >> (7 - (i & 7))) & 1u);
+    }
+    encode(bits, 80, 12, 0x80F, FACCH1_KEEP, 4, 9, 16, out);
+}
+
+void nxdn_tx_vch(const uint8_t ambe[9], uint8_t out[36])
+{
+    for (int i = 0; i < VCH_SYMS; i++) {
+        out[i] = (uint8_t)((ambe[i >> 2] >> (6 - 2 * (i & 3))) & 3u);
+    }
+}
+
+void nxdn_tx_frame(uint8_t lich, uint8_t sr, uint32_t sacch18, const uint8_t middle[144], uint8_t out[NXDN_FRAME_SYMS])
+{
+    tables();
+    uint8_t *p = &out[10];
+    memcpy(out, fsw_dibits, 10);
+    int par = 0;
+    for (int i = 0; i < 7; i++) {
+        int b = (lich >> (6 - i)) & 1;
+        par ^= (i < 4) ? b : 0;
+        p[i] = b ? 3 : 1; // 1: -3, 0: +3
+    }
+    p[7] = par ? 3 : 1;
+    sacch_encode(sr, sacch18, &p[LICH_SYMS]);
+    memcpy(&p[LICH_SYMS + SACCH_SYMS], middle, 144);
+    for (int i = 0; i < PAYLOAD; i++) {
+        if (pn[i]) {
+            p[i] ^= 2; // the symbol inverted: the sign bit
+        }
+    }
+}
+
+static void msg_call(uint8_t msg[10], uint8_t kind, uint8_t mode, uint16_t src, uint16_t dst)
+{
+    memset(msg, 0, 10);
+    msg[0] = kind;
+    msg[2] = (uint8_t)((1u << 5) | mode); // a group call
+    msg[3] = (uint8_t)(src >> 8);
+    msg[4] = (uint8_t)src;
+    msg[5] = (uint8_t)(dst >> 8);
+    msg[6] = (uint8_t)dst;
+}
+
+void nxdn_msg_vcall(uint8_t msg[10], uint16_t src, uint16_t dst)
+{
+    msg_call(msg, NXDN_MSG_VCALL, 0, src, dst);
+}
+
+void nxdn_msg_tx_rel(uint8_t msg[10], uint16_t src, uint16_t dst)
+{
+    msg_call(msg, NXDN_MSG_TX_REL, 0, src, dst);
+}
+
+// the VCALL's 18 bits of SACCH part k (0 .. 3) of 72 (its 8 bytes and one of zeros)
+static uint32_t vcall_part(const uint8_t vcall[10], int k)
+{
+    uint32_t v = 0;
+    for (int i = 18 * k; i < 18 * k + 18; i++) {
+        v = (v << 1) | ((vcall[i >> 3] >> (7 - (i & 7))) & 1u);
+    }
+    return v;
+}
+
+// a frame of the message in both FACCH1s, the single SACCH (structure 00) with its first 18 bits
+static int tx_facch_frame(nxdn_tx *t, const uint8_t msg[10], uint8_t *out)
+{
+    uint8_t mid[144];
+    nxdn_tx_facch1(msg, mid);
+    memcpy(&mid[72], mid, 72);
+    nxdn_tx_frame(NXDN_LICH_FIRST, t->ran, vcall_part(msg, 0), mid, out);
+    return NXDN_FRAME_SYMS;
+}
+
+int nxdn_tx_begin(nxdn_tx *t, uint16_t src, uint16_t dst, uint8_t ran, uint8_t *out)
+{
+    memset(t, 0, sizeof(*t));
+    t->src = src;
+    t->dst = dst;
+    t->ran = ran & 0x3F;
+    nxdn_msg_vcall(t->vcall, src, dst);
+    nxdn_tx_preamble(out);
+    return NXDN_PREAMBLE_SYMS + tx_facch_frame(t, t->vcall, &out[NXDN_PREAMBLE_SYMS]);
+}
+
+int nxdn_tx_voice(nxdn_tx *t, const uint8_t ambe[4][9], uint8_t *out)
+{
+    uint8_t mid[144];
+    int part = (int)(t->frames % 4);
+    for (int i = 0; i < 4; i++) {
+        nxdn_tx_vch(ambe[i], &mid[VCH_SYMS * i]);
+    }
+    nxdn_tx_frame(NXDN_LICH_VOICE, (uint8_t)(((3 - part) << 6) | t->ran), vcall_part(t->vcall, part), mid, out);
+    t->frames++;
+    return NXDN_FRAME_SYMS;
+}
+
+int nxdn_tx_end(nxdn_tx *t, uint8_t *out)
+{
+    uint8_t rel[10];
+    nxdn_msg_tx_rel(rel, t->src, t->dst);
+    return tx_facch_frame(t, rel, out);
+}

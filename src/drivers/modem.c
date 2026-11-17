@@ -135,17 +135,40 @@ void modem_init(void)
     WORK_MODE = WORK_MODE_FM;
 }
 
+static uint32_t mod_scale = MODEM_MOD_SCALE_ONE; // modem_set_mod_scale()
+static uint32_t mod_bias_set;                     // RF_MOD_BIAS_CTRL as calibrated, before the scale
+
+// The low half is two bytes, each scaled on its own (measured 2026-11-17 on the other radio's discriminator: 0x4343
+// the DMR / P25 level, 0x2424 NXDN48's as the hotspot sends it; the half scaled as one value, 0x2452, came out
+// larger, not smaller)
+static uint32_t scaled(uint32_t bias)
+{
+    uint32_t out = bias & 0xFFFF0000u;
+    for (int shift = 0; shift < 16; shift += 8) {
+        uint32_t level = (((bias >> shift) & 0xFFu) * mod_scale) / MODEM_MOD_SCALE_ONE;
+        out |= ((level > 0xFFu) ? 0xFFu : level) << shift;
+    }
+    return out;
+}
+
 void modem_set_frequency_calibration(bool valid, uint8_t osc_tune, uint16_t rx_adjust, uint16_t mod_bias)
 {
     if (valid) {
         uint32_t osc = osc_tune;
 
-        SIG_CENTER = (osc << 24) | (osc << 16);                    // Tx frequency
-        RF_MOD_BIAS_CTRL = ((uint32_t)rx_adjust << 16) | mod_bias; // Rx frequency, the 4FSK level
+        SIG_CENTER = (osc << 24) | (osc << 16);                // Tx frequency
+        mod_bias_set = ((uint32_t)rx_adjust << 16) | mod_bias; // Rx frequency, the 4FSK level
     } else {
         SIG_CENTER = DEFAULT_SIG_CENTER;
-        RF_MOD_BIAS_CTRL = DEFAULT_MOD_BIAS;
+        mod_bias_set = DEFAULT_MOD_BIAS;
     }
+    RF_MOD_BIAS_CTRL = scaled(mod_bias_set);
+}
+
+void modem_set_mod_scale(uint32_t scale)
+{
+    mod_scale = scale;
+    RF_MOD_BIAS_CTRL = scaled(mod_bias_set);
 }
 
 // The FM filters: 12.5 kHz 0x50 / 0x40A25, 25 kHz 0x5F / 0x40A20; bit 4 (pre / de-emphasis) on in receive too, as

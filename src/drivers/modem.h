@@ -40,6 +40,10 @@
 void modem_init(void);
 // SIG_CENTER / RF_MOD_BIAS_CTRL from the factory TX and RX frequency adjust and the 4FSK bias of the frequency
 void modem_set_frequency_calibration(bool valid, uint8_t osc_tune, uint16_t rx_adjust, uint16_t mod_bias);
+// The 4FSK level (RF_MOD_BIAS_CTRL's low half, each of its two bytes) times scale / MODEM_MOD_SCALE_ONE from now on, also as calibrated
+// later (NXDN48: its deviation from the modem's 4FSK, nxdn_radio.c); MODEM_MOD_SCALE_ONE: as calibrated
+#define MODEM_MOD_SCALE_ONE 1024
+void modem_set_mod_scale(uint32_t scale);
 void modem_fm_receive(bool wide, uint8_t dac_gain); // dac_gain: GCR_DACL (factory_cal_rx_dac_gain())
 void modem_fm_transmit(bool wide, uint8_t mic_gain); // mic_gain: GCR_ADCL (settings.mic_gain_fm)
 void modem_fm_audio(bool on);                        // the received audio through to the DAC
