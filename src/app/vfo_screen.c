@@ -306,8 +306,8 @@ void vfo_screen_show(void)
 
 void vfo_screen_leave(void)
 {
+    ui_home(); // from the quick menu (VFO --> New Chan): back on this screen, whose enter() sets the VFO home
     set_home_mode(false);
-    ui_home();
     ui_replace(&channel_screen, NULL);
 }
 
