@@ -137,6 +137,19 @@ static inline void codeplug_set_p25_nac(codeplug_channel_t *channel, uint16_t na
     channel->unused2 = (uint8_t)(0xA0 | ((nac >> 8) & 0x0F));
 }
 
+// NXDN channels (and VFOs): the RAN, 0 - 63, in DMR's colour code byte (a channel from the OpenGD77 CPS: its colour
+// code, 0 - 15); out of range (a P25 NAC's low byte, 0xFF): 1. RAN 0: any received (nxdn_radio.c), 0 transmitted
+#define CODEPLUG_NXDN_RAN_DEFAULT 1
+#define CODEPLUG_NXDN_RAN_MAX     63
+static inline uint8_t codeplug_nxdn_ran(const codeplug_channel_t *channel)
+{
+    return (channel->tx_colour <= CODEPLUG_NXDN_RAN_MAX) ? channel->tx_colour : CODEPLUG_NXDN_RAN_DEFAULT;
+}
+static inline void codeplug_set_nxdn_ran(codeplug_channel_t *channel, uint8_t ran)
+{
+    channel->tx_colour = (ran <= CODEPLUG_NXDN_RAN_MAX) ? ran : CODEPLUG_NXDN_RAN_DEFAULT;
+}
+
 typedef struct {
     char name[CODEPLUG_NAME_LENGTH];
     uint16_t channels[CODEPLUG_ZONE_CHANNELS]; // channel numbers (1 ..), 0 after the last one

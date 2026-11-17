@@ -440,6 +440,7 @@ typedef enum {
     TEXT_CALLER_PLACE,
     TEXT_THEME,
     TEXT_LANGUAGE_MENU,
+    TEXT_NXDN_ID,
     TEXT_COUNT
 } text_id_t;
 

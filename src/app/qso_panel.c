@@ -156,7 +156,8 @@ static void draw(const dmr_call_t *call, const char *mode, const char *status_it
     const font_t *call_font = &font_roboto44_bold;
     status_bar_data_t status = {.state = STATUS_BAR_RECEIVING};
     s_meter_data_t meter = {.active = true, .open = true, .compact = true};
-    bottom_bar_data_t bottom = {.mode = mode, .item1 = power, .item2 = "12.5K"}; // as the screen's
+    bottom_bar_data_t bottom = {.mode = mode, .item1 = power, // as the screen's (NXDN48: 6.25 kHz)
+                                .item2 = (mode && (strcmp(mode, "NXDN") == 0)) ? "6.25K" : "12.5K"};
     char caller[LAST_HEARD_TEXT_SIZE];
     char callsign[LAST_HEARD_TEXT_SIZE];
     char rest[LAST_HEARD_TEXT_SIZE];

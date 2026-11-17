@@ -52,9 +52,10 @@ bool nxdn_radio_call(nxdn_call_t *out);        // the call now (false: none)
 bool nxdn_radio_heard_within(uint32_t ms);     // a frame decoded lately (scan)
 uint32_t nxdn_call_tg_or_pc(const nxdn_call_t *c); // as last heard keeps it
 
-// Transmit: a group call from src to dst on the RAN (tx_target.c sets them); the PTT on / off, transmitting until the
+// The channel's RAN (0: any received; transmitted as it is), our ID (individual calls to others ignored) and where a
+// transmission goes: a group, or a unit (individual) (tx_target.c sets them). The PTT on / off, transmitting until the
 // last frame is sent (nxdn_radio_transmitting())
-void nxdn_radio_set_target(uint8_t ran, uint16_t src, uint16_t dst);
+void nxdn_radio_set_target(uint8_t ran, uint16_t src, uint16_t dst, bool individual);
 void nxdn_radio_transmit(bool on);
 bool nxdn_radio_transmitting(void);
 
@@ -63,6 +64,7 @@ typedef struct {
     uint32_t halves, missed_halves, frames, lich_bad, sacch_ok, vch, facch_ok, hunts, lost_sync;
     uint32_t pcm_drops, underruns, calls, busy_max_us;
     uint32_t dec_us_max, dec_us_sum, demod_us_sum, feed_writes; // our AMBE decoder; the rest of the halves' work
+    uint32_t other_ran;                                         // frames of another RAN than the channel's
 } nxdn_radio_stats_t;
 extern volatile nxdn_radio_stats_t nxdn_radio_stats;
 

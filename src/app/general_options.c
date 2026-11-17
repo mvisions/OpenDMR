@@ -43,6 +43,7 @@
 #include "gps.h"
 #include "security.h"
 #include "pin_screen.h"
+#include "nxdn_id.h"
 
 #define KEY_TIMER_MIN      1  // 100 ms units; never 0 (the main firmware: else the watchdog may kick in)
 #define KEY_TIMER_MAX      90 // 9 s
@@ -308,6 +309,27 @@ static const ui_custom_t own_id = {
     .select = own_id_select,
 };
 
+/* NXDN ID (nxdn_id.h): its own, or the DMR ID's (shown as "= DMR ID" then); the left key opens the number entry */
+
+static void nxdn_id_format(char *buffer, size_t size)
+{
+    if (nxdn_id_stored() == 0) {
+        snprintf(buffer, size, "%u (DMR ID)", (unsigned)nxdn_id_get());
+    } else {
+        snprintf(buffer, size, "%u", (unsigned)nxdn_id_stored());
+    }
+}
+
+static void nxdn_id_select(void)
+{
+    ui_push(&number_entry_screen, NUMBER_ENTRY_NXDN_ID);
+}
+
+static const ui_custom_t nxdn_id_item = {
+    .format = nxdn_id_format,
+    .select = nxdn_id_select,
+};
+
 /* The menus open where they were left also after a restart (ui/list.c; while on, always) */
 
 static void menu_places_format(char *buffer, size_t size)
@@ -406,6 +428,7 @@ static const ui_item_t general_options_items[] = {
     {TEXT_GPS, ICONS_COUNT, UI_ITEM_CUSTOM, &gps, NULL},
     {TEXT_MENU_PLACES, ICONS_COUNT, UI_ITEM_CUSTOM, &menu_places, NULL},
     {TEXT_USER_DMR_ID, ICONS_COUNT, UI_ITEM_CUSTOM, &own_id, NULL},
+    {TEXT_NXDN_ID, ICONS_COUNT, UI_ITEM_CUSTOM, &nxdn_id_item, NULL},
 };
 
 const ui_list_t general_options = {

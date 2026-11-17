@@ -436,4 +436,5 @@ const char *const text_zh[TEXT_COUNT] = {
     [TEXT_CALLER_PLACE] = "对方地址",
     [TEXT_THEME] = "主题",
     [TEXT_LANGUAGE_MENU] = "Language",
+    [TEXT_NXDN_ID] = "NXDN ID",
 };

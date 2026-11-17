@@ -436,4 +436,5 @@ const char *const text_es[TEXT_COUNT] = {
     [TEXT_CALLER_PLACE] = "Lugar llamante",
     [TEXT_THEME] = "Tema",
     [TEXT_LANGUAGE_MENU] = "Language",
+    [TEXT_NXDN_ID] = "ID NXDN",
 };

@@ -117,19 +117,22 @@ void nxdn_tx_preamble(uint8_t out[NXDN_PREAMBLE_SYMS]);
 void nxdn_tx_frame(uint8_t lich, uint8_t sr, uint32_t sacch18, const uint8_t middle[144], uint8_t out[NXDN_FRAME_SYMS]);
 void nxdn_tx_facch1(const uint8_t msg[10], uint8_t out[72]); // a message of 10 bytes -> 72 symbols
 void nxdn_tx_vch(const uint8_t ambe[9], uint8_t out[36]);     // an AMBE+2 frame (DMR's bit order) -> 36 symbols
-// VCALL (6.4.1.1) and TX_REL (6.4.1.6), 10 bytes (zeros after): call type 1 group, mode 0 (4800 EHR), clear
-void nxdn_msg_vcall(uint8_t msg[10], uint16_t src, uint16_t dst);
-void nxdn_msg_tx_rel(uint8_t msg[10], uint16_t src, uint16_t dst);
+// VCALL (6.4.1.1) and TX_REL (6.4.1.6), 10 bytes (zeros after): the call type (group, individual), mode 0 (4800
+// EHR), clear
+#define NXDN_CALL_GROUP      1
+#define NXDN_CALL_INDIVIDUAL 4
+void nxdn_msg_vcall(uint8_t msg[10], uint8_t type, uint16_t src, uint16_t dst);
+void nxdn_msg_tx_rel(uint8_t msg[10], uint8_t type, uint16_t src, uint16_t dst);
 
 // A whole call as it goes on: nxdn_tx_begin() the preamble and the first frame, nxdn_tx_voice() a frame of 4 voice
 // frames (its SACCH a quarter of the VCALL), nxdn_tx_end() the last frame (TX_REL); each returns the symbols written
 typedef struct {
     uint16_t src, dst;
-    uint8_t ran;
+    uint8_t ran, type;
     uint32_t frames; // voice frames sent: the SACCH part is frames % 4
     uint8_t vcall[10];
 } nxdn_tx;
-int nxdn_tx_begin(nxdn_tx *t, uint16_t src, uint16_t dst, uint8_t ran, uint8_t *out); // 12 + 192 symbols
+int nxdn_tx_begin(nxdn_tx *t, uint16_t src, uint16_t dst, uint8_t ran, uint8_t type, uint8_t *out); // 12 + 192
 int nxdn_tx_voice(nxdn_tx *t, const uint8_t ambe[4][9], uint8_t *out);                // 192
 int nxdn_tx_end(nxdn_tx *t, uint8_t *out);                                           // 192
 

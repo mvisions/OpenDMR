@@ -1000,7 +1000,16 @@ static void draw(void)
             draw_text(VALUE_X, TONE_Y, target.name, &font_roboto20, FONT_ALIGN_LEFT, THEME_COLOUR_TEXT);
         }
     } else if (v->mode == CODEPLUG_MODE_NXDN) {
-        // NXDN: receive only, any RAN for now: nothing to show under the frequencies
+        // NXDN: as P25, the group or unit transmitted to (tx_target_apply()), the RAN on its line, right
+        bool pc = ((target.id >> 24) == TX_TARGET_PC_FLAG);
+
+        icons_draw(WIDGET_MARGIN, TONE_Y + 3, (pc ? ICONS_CONTACT : ICONS_TALKGROUP), THEME_COLOUR_TEXT_LABEL);
+        if (target.id != 0) {
+            draw_text(VALUE_X, TONE_Y, target.name, &font_roboto20, FONT_ALIGN_LEFT, THEME_COLOUR_TEXT);
+        }
+        snprintf(buffer, sizeof(buffer), "RAN %u", (unsigned)codeplug_nxdn_ran(v));
+        draw_text(FB_WIDTH - WIDGET_MARGIN, TONE_Y + 2, buffer, &font_roboto17, FONT_ALIGN_RIGHT,
+                  THEME_COLOUR_TEXT_LABEL);
     } else if (v->mode == CODEPLUG_MODE_P25) {
         // P25: the talk group transmitted to (tx_target_apply()), the NAC on its line, right
         icons_draw(WIDGET_MARGIN, TONE_Y + 3, ICONS_TALKGROUP, THEME_COLOUR_TEXT_LABEL);

@@ -404,7 +404,7 @@ static void draw_bottom(void)
 
     bottom.mode = codeplug_mode_name(tx.channel.mode);
     bottom.item1 = bottom_bar_power_label(power);
-    bottom.item2 = (tx.channel.flag4 & FLAG4_WIDE) ? "25K" : "12.5K";
+    bottom.item2 = (tx.channel.mode == CODEPLUG_MODE_NXDN) ? "6.25K" : ((tx.channel.flag4 & FLAG4_WIDE) ? "25K" : "12.5K");
     bottom_bar_draw(&bottom);
 }
 
@@ -518,6 +518,10 @@ static void draw(void)
         draw_text(WIDGET_MARGIN, DETAIL_Y, buffer, &font_roboto20, FONT_ALIGN_LEFT, THEME_COLOUR_TEXT_SECOND);
         if (tx.channel.mode == CODEPLUG_MODE_P25) { // the NAC on the frequency's line, right
             snprintf(cc, sizeof(cc), "NAC %03X", codeplug_p25_nac(&tx.channel));
+            draw_text(FB_WIDTH - WIDGET_MARGIN, DETAIL_Y + 2, cc, &font_roboto17, FONT_ALIGN_RIGHT,
+                      THEME_COLOUR_TEXT_LABEL);
+        } else if (tx.channel.mode == CODEPLUG_MODE_NXDN) { // the RAN there
+            snprintf(cc, sizeof(cc), "RAN %u", (unsigned)codeplug_nxdn_ran(&tx.channel));
             draw_text(FB_WIDTH - WIDGET_MARGIN, DETAIL_Y + 2, cc, &font_roboto17, FONT_ALIGN_RIGHT,
                       THEME_COLOUR_TEXT_LABEL);
         }

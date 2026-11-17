@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     fclose(f);
     nxdn_tx t;
     static uint8_t out[NXDN_PREAMBLE_SYMS + NXDN_FRAME_SYMS];
-    int k = nxdn_tx_begin(&t, (uint16_t)atoi(argv[2]), (uint16_t)atoi(argv[3]), (uint8_t)atoi(argv[4]), out);
+    int k = nxdn_tx_begin(&t, (uint16_t)atoi(argv[2]), (uint16_t)atoi(argv[3]), (uint8_t)atoi(argv[4]), NXDN_CALL_GROUP, out);
     fwrite(out, 1, k, stdout);
     for (int i = 0; i < n; i += 4) {
         uint8_t a[4][9];

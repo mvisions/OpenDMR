@@ -19,7 +19,7 @@ import dm32dbg  # noqa: E402
 import radio  # noqa: E402
 
 NAMES = ('halves missed_halves frames lich_bad sacch_ok vch facch_ok hunts lost_sync pcm_drops underruns calls '
-         'busy_max_us dec_us_max dec_us_sum demod_us_sum feed_writes').split()
+         'busy_max_us dec_us_max dec_us_sum demod_us_sum feed_writes other_ran').split()
 
 
 def stats(r, sym):

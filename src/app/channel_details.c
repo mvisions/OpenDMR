@@ -160,6 +160,11 @@ static bool is_p25(void)
     return edit->mode == CODEPLUG_MODE_P25;
 }
 
+static bool is_nxdn(void)
+{
+    return edit->mode == CODEPLUG_MODE_NXDN;
+}
+
 // P25's NAC (codeplug.h): LEFT / RIGHT 1, held 0x10 (0x000 - 0xFFF; 0xF7E receives any)
 static void step_nac(int direction, bool fast)
 {
@@ -307,13 +312,20 @@ static void change(int item, int direction, bool fast, uint8_t modifiers)
             break;
         case ITEM_MODE: // FM, AM, USB, LSB, DMR (DMR is 12.5 kHz)
             edit->mode = codeplug_mode_step(edit->mode, direction);
-            if (edit->mode == CODEPLUG_MODE_DMR) {
+            if ((edit->mode == CODEPLUG_MODE_DMR) || (edit->mode == CODEPLUG_MODE_NXDN)) {
                 set_bit(&edit->flag4, FLAG4_BANDWIDTH_25K, false);
+            }
+            if (edit->mode == CODEPLUG_MODE_NXDN) {
+                codeplug_set_nxdn_ran(edit, codeplug_nxdn_ran(edit)); // a P25 NAC's byte: a RAN again
             }
             break;
         case ITEM_COLOUR_CODE:
             if (is_p25()) {
                 step_nac(direction, fast);
+            } else if (is_nxdn()) {
+                uint8_t ran = codeplug_nxdn_ran(edit);
+                step_value(&ran, direction * (fast ? 8 : 1), 0, CODEPLUG_NXDN_RAN_MAX);
+                codeplug_set_nxdn_ran(edit, ran);
             } else if (!fm) {
                 step_value(&edit->tx_colour, direction, 0, COLOUR_CODE_MAX);
             }
@@ -325,7 +337,7 @@ static void change(int item, int direction, bool fast, uint8_t modifiers)
             break;
         case ITEM_RX_CSS:
         case ITEM_TX_CSS:
-            if (fm && !aprs) {
+            if (fm && !aprs && !is_nxdn()) {
                 {
                     uint16_t *tone = ((item == ITEM_RX_CSS) ? &edit->rx_tone : &edit->tx_tone);
 
@@ -334,7 +346,7 @@ static void change(int item, int direction, bool fast, uint8_t modifiers)
             }
             break;
         case ITEM_BANDWIDTH:
-            if (fm) {
+            if (fm && !is_nxdn()) {
                 set_bit(&edit->flag4, FLAG4_BANDWIDTH_25K, on);
             }
             break;
@@ -392,12 +404,12 @@ static void change(int item, int direction, bool fast, uint8_t modifiers)
             }
             break;
         case ITEM_TG_LIST:
-            if (!fm || is_p25()) {
+            if (!fm || is_p25() || is_nxdn()) {
                 step_rx_group(direction);
             }
             break;
         case ITEM_CONTACT:
-            if (!fm || is_p25()) {
+            if (!fm || is_p25() || is_nxdn()) {
                 step_contact(direction);
             }
             break;
@@ -492,6 +504,15 @@ static void format_item(int item, char *label, size_t label_size, char *out, siz
                 } else {
                     snprintf(out, size, "%03X", nac);
                 }
+            } else if (is_nxdn()) {
+                uint8_t ran = codeplug_nxdn_ran(edit);
+
+                snprintf(label, label_size, "RAN");
+                if (ran == 0) { // receives any RAN (transmits 0)
+                    snprintf(out, size, "0 (%s)", text(TEXT_ALL));
+                } else {
+                    snprintf(out, size, "%u", ran);
+                }
             } else if (fm) {
                 snprintf(out, size, "%s", na);
             } else {
@@ -509,7 +530,7 @@ static void format_item(int item, char *label, size_t label_size, char *out, siz
         case ITEM_CONTACT: {
             unsigned number = ((item == ITEM_TG_LIST) ? edit->rx_group_list : edit->contact);
 
-            if (fm && !is_p25()) {
+            if (fm && !is_p25() && !is_nxdn()) {
                 snprintf(out, size, "%s", na);
             } else if (number == 0) {
                 snprintf(out, size, "%s", text(TEXT_NONE));
@@ -534,11 +555,21 @@ static void format_item(int item, char *label, size_t label_size, char *out, siz
         }
         case ITEM_RX_CSS:
             format_css(text(TEXT_RX), edit->rx_tone, label, label_size, out, size);
+            if (is_nxdn()) {
+                snprintf(out, size, "%s", na);
+            }
             break;
         case ITEM_TX_CSS:
             format_css(text(TEXT_TX), edit->tx_tone, label, label_size, out, size);
+            if (is_nxdn()) {
+                snprintf(out, size, "%s", na);
+            }
             break;
         case ITEM_BANDWIDTH:
+            if (is_nxdn()) { // NXDN48
+                snprintf(out, size, "6.25kHz");
+                break;
+            }
             snprintf(out, size, "%s", (!fm ? na : ((edit->flag4 & FLAG4_BANDWIDTH_25K) ? "25kHz" : "12.5kHz")));
             break;
         case ITEM_STEP: {

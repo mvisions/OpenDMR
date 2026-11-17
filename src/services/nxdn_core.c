@@ -744,25 +744,25 @@ void nxdn_tx_frame(uint8_t lich, uint8_t sr, uint32_t sacch18, const uint8_t mid
     }
 }
 
-static void msg_call(uint8_t msg[10], uint8_t kind, uint8_t mode, uint16_t src, uint16_t dst)
+static void msg_call(uint8_t msg[10], uint8_t kind, uint8_t type, uint8_t mode, uint16_t src, uint16_t dst)
 {
     memset(msg, 0, 10);
     msg[0] = kind;
-    msg[2] = (uint8_t)((1u << 5) | mode); // a group call
+    msg[2] = (uint8_t)(((type & 7u) << 5) | mode);
     msg[3] = (uint8_t)(src >> 8);
     msg[4] = (uint8_t)src;
     msg[5] = (uint8_t)(dst >> 8);
     msg[6] = (uint8_t)dst;
 }
 
-void nxdn_msg_vcall(uint8_t msg[10], uint16_t src, uint16_t dst)
+void nxdn_msg_vcall(uint8_t msg[10], uint8_t type, uint16_t src, uint16_t dst)
 {
-    msg_call(msg, NXDN_MSG_VCALL, 0, src, dst);
+    msg_call(msg, NXDN_MSG_VCALL, type, 0, src, dst);
 }
 
-void nxdn_msg_tx_rel(uint8_t msg[10], uint16_t src, uint16_t dst)
+void nxdn_msg_tx_rel(uint8_t msg[10], uint8_t type, uint16_t src, uint16_t dst)
 {
-    msg_call(msg, NXDN_MSG_TX_REL, 0, src, dst);
+    msg_call(msg, NXDN_MSG_TX_REL, type, 0, src, dst);
 }
 
 // the VCALL's 18 bits of SACCH part k (0 .. 3) of 72 (its 8 bytes and one of zeros)
@@ -785,13 +785,14 @@ static int tx_facch_frame(nxdn_tx *t, const uint8_t msg[10], uint8_t *out)
     return NXDN_FRAME_SYMS;
 }
 
-int nxdn_tx_begin(nxdn_tx *t, uint16_t src, uint16_t dst, uint8_t ran, uint8_t *out)
+int nxdn_tx_begin(nxdn_tx *t, uint16_t src, uint16_t dst, uint8_t ran, uint8_t type, uint8_t *out)
 {
     memset(t, 0, sizeof(*t));
     t->src = src;
     t->dst = dst;
     t->ran = ran & 0x3F;
-    nxdn_msg_vcall(t->vcall, src, dst);
+    t->type = type;
+    nxdn_msg_vcall(t->vcall, type, src, dst);
     nxdn_tx_preamble(out);
     return NXDN_PREAMBLE_SYMS + tx_facch_frame(t, t->vcall, &out[NXDN_PREAMBLE_SYMS]);
 }
@@ -811,6 +812,6 @@ int nxdn_tx_voice(nxdn_tx *t, const uint8_t ambe[4][9], uint8_t *out)
 int nxdn_tx_end(nxdn_tx *t, uint8_t *out)
 {
     uint8_t rel[10];
-    nxdn_msg_tx_rel(rel, t->src, t->dst);
+    nxdn_msg_tx_rel(rel, t->type, t->src, t->dst);
     return tx_facch_frame(t, rel, out);
 }

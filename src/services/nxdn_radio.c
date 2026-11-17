@@ -117,6 +117,7 @@ static volatile bool tx_want, tx_busy;
 static volatile bool tx_on; // transmitting: the playback off
 static volatile uint16_t tx_src, tx_dst = 1;
 static volatile uint8_t tx_ran = 1;
+static volatile bool tx_individual;
 static nxdn_tx tx OVERLAY_BSS;
 static uint8_t tx_ambe[4][9] OVERLAY_BSS;
 static uint8_t tx_syms[TX_LEAD_MAX + NXDN_PREAMBLE_SYMS + NXDN_FRAME_SYMS] OVERLAY_BSS;
@@ -129,6 +130,7 @@ volatile uint32_t nxdn_tx_source;       // 0 the mic; 1 the AMBE frames of the f
 volatile uint32_t nxdn_tx_stats[4];     // calls, frames, encoder frames, underruns (the last call's)
 
 static nxdn_call_t call;
+static bool ignored; // the call on the air is not for us (another unit called, another RAN)
 static TickType_t last_voice;
 static volatile TickType_t heard_at;
 static volatile bool heard;
@@ -206,6 +208,10 @@ static void message(const uint8_t *msg, int len, uint8_t ran)
         }
         return;
     }
+    if ((type == NXDN_CALL_INDIVIDUAL) && (dst != tx_src)) { // a unit called, not us
+        ignored = true;
+        return;
+    }
     call_begin();
     call.type = type;
     call.src = src;
@@ -252,6 +258,29 @@ static void on_frame(void *ctx, const nxdn_frame_t *f)
     heard_at = xTaskGetTickCount();
     if (f->sacch_ok) {
         nxdn_radio_stats.sacch_ok++;
+        // another RAN than the channel's (0: any): not ours, nothing of it taken
+        uint8_t ran = (uint8_t)(f->sacch_sr & 0x3F);
+        if ((tx_ran != 0) && (ran != tx_ran)) {
+            nxdn_radio_stats.other_ran++;
+            if (!call.active) {
+                ignored = true;
+            }
+            return;
+        }
+    }
+    if (ignored && !call.active) { // a call not for us: its frames ignored until a VCALL for us comes
+        uint8_t msg[9];
+        for (int h = 0; h < 2; h++) {
+            if (f->facch_ok & (1u << h)) {
+                ignored = false; // judged again from this one
+                message(f->facch[h], 10, (uint8_t)(f->sacch_sr & 0x3F));
+            }
+        }
+        if (nxdn_sacch_add(&super, f, msg)) {
+            ignored = false;
+            message(msg, 9, (uint8_t)(f->sacch_sr & 0x3F));
+        }
+        return;
     }
     uint8_t msg[9];
     if (nxdn_sacch_add(&super, f, msg)) {
@@ -265,7 +294,7 @@ static void on_frame(void *ctx, const nxdn_frame_t *f)
     }
     // a call begins with a frame whose SACCH or FACCH1 CRC holds (LICH parity alone: 1 in 2 by chance), noise
     // decoded as voice otherwise
-    if (f->halves && (call.active || f->sacch_ok || f->facch_ok) && !nxdn_play_frames) {
+    if (f->halves && !ignored && (call.active || f->sacch_ok || f->facch_ok) && !nxdn_play_frames) {
         call_begin();
         last_voice = xTaskGetTickCount();
         for (int k = 0; k < 4; k++) {
@@ -403,7 +432,8 @@ static void transmit(void)
     for (uint32_t i = 0; i < lead; i++) {
         tx_syms[i] = (i & 1) ? 3 : 1; // +3, -3
     }
-    int n = (int)lead + nxdn_tx_begin(&tx, tx_src, tx_dst, tx_ran, &tx_syms[lead]);
+    int n = (int)lead + nxdn_tx_begin(&tx, tx_src, tx_dst, tx_ran,
+                                      tx_individual ? NXDN_CALL_INDIVIDUAL : NXDN_CALL_GROUP, &tx_syms[lead]);
     put(tx_syms, n);
     bool started = (p25_phy_tx_begin(nxdn_tx_low_power != 0) == 0);
     int16_t pcm[160];
@@ -466,15 +496,17 @@ static void transmit(void)
     memset(&super, 0, sizeof(super));
     vocoderReset();
     pcm_in = pcm_out = 0;
+    ignored = false;
     tx_on = false;
     tx_busy = false;
 }
 
-void nxdn_radio_set_target(uint8_t ran, uint16_t src, uint16_t dst)
+void nxdn_radio_set_target(uint8_t ran, uint16_t src, uint16_t dst, bool individual)
 {
     tx_ran = ran & 0x3F;
     tx_src = src;
     tx_dst = dst;
+    tx_individual = individual;
 }
 
 void nxdn_radio_transmit(bool on)
@@ -543,6 +575,9 @@ static void task_main(void *arg)
             last_voice = xTaskGetTickCount();
             play_next += pdMS_TO_TICKS(80);
         }
+        if (ignored && ((xTaskGetTickCount() - heard_at) >= pdMS_TO_TICKS(CALL_TIMEOUT))) {
+            ignored = false; // the call not for us is over
+        }
         if (call.active && ((xTaskGetTickCount() - last_voice) >= pdMS_TO_TICKS(CALL_TIMEOUT))) {
             call_end();
         }
@@ -570,6 +605,7 @@ void nxdn_radio_start(void)
     nxdn_rx_init(&rx, on_frame, NULL);
     memset(&super, 0, sizeof(super));
     memset(&call, 0, sizeof(call));
+    ignored = false;
     memset(&published, 0, sizeof(published));
     pcm_in = pcm_out = 0;
     pcm_pos = 0;

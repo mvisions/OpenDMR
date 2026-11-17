@@ -856,7 +856,19 @@ static void draw(void)
         bottom.mode = "P25";
         bottom.item2 = "12.5K";
     } else if (channel.mode == CODEPLUG_MODE_NXDN) {
-        // NXDN48: receive only, any RAN for now (the RAN of a call shows in its panel)
+        // NXDN48: as P25, the group or unit transmitted to (tx_target_apply()), the RAN on its line
+        bool pc = ((target.id >> 24) == TX_TARGET_PC_FLAG);
+
+        snprintf(cc_text, sizeof(cc_text), "RAN %u", (unsigned)codeplug_nxdn_ran(&channel));
+        panel.line_icon = pc ? ICONS_CONTACT : ICONS_TALKGROUP;
+        panel.line_right = cc_text;
+        if (target.id != 0) {
+            panel.line_text = target.name;
+            snprintf(detail, sizeof(detail), "%s %lu", text(pc ? TEXT_PC : TEXT_TG), (unsigned long)(target.id & 0xFFFF));
+            if (strcmp(detail, target.name) != 0) {
+                panel.line_detail = detail;
+            }
+        }
         bottom.mode = "NXDN";
         bottom.item2 = "6.25K";
     } else {

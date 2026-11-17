@@ -38,5 +38,6 @@ extern const ui_screen_t number_entry_screen; // arg: one of these
 #define NUMBER_ENTRY_TX_TARGET ((void *)1) // the TG / PC to transmit to (or the own ID)
 #define NUMBER_ENTRY_OWN_ID    ((void *)2) // the own ID only
 #define NUMBER_ENTRY_DTMF      ((void *)3) // FM: a DTMF code (the digits, * and #), sent with the left key
+#define NUMBER_ENTRY_NXDN_ID   ((void *)4) // the own NXDN ID only (1 - 65535; 0: not set, the DMR ID's)
 
 #endif
