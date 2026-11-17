@@ -66,6 +66,7 @@
 #define TONE_BURST_HZ 1750
 #define BEEP_DMR_TX_START 0x01 // settings.beep_options
 #define BEEP_POLL_MS      10
+#define LATCH_END_MS      3000 // latched: the timeout / no repeater page closes by itself after this
 
 typedef enum {
     TX_REFUSED,
@@ -84,6 +85,7 @@ static struct {
     tx_state_t state;
     radio_tx_check_t refused;
     uint32_t start_ms;
+    bool latched; // PTT latch: the PTT was released while transmitting; a press (or RED) ends it
 } tx;
 
 static const ui_screen_t tx_screen;
@@ -202,6 +204,7 @@ static void enter(void *arg)
         return; // nothing goes over it
     }
     tx.refused = radio_tx_check();
+    tx.latched = false;
     tx.state = (tx.refused == RADIO_TX_OK) ? TX_STARTING : TX_REFUSED;
     if (tx.state == TX_STARTING) {
         ui_timer_start(0); // after the first draw: start()
@@ -309,25 +312,58 @@ static bool handle_sequence(const ui_event_t *ev)
     return false;
 }
 
+// PTT latch (Radio options): only with a channel TOT (as OpenGD77: never an endless transmission), not for the VOX
+// nor a DTMF sequence
+static bool latch_allowed(const ui_event_t *ev)
+{
+    return (settings.bitfield_options & SETTINGS_BIT_PTT_LATCH) && (tx.channel.tot != 0) &&
+           (ev->what != UI_KEY_FROM_VOX) &&
+           ((tx.state == TX_STARTING) || (tx.state == TX_BEEPING) || (tx.state == TX_ON));
+}
+
+static void end_signal(void)
+{
+    if (signal_key != UI_KEY_COUNT) {
+        radio_tx_signal(0, 0);
+        sound_play(NULL);
+        signal_key = UI_KEY_COUNT;
+    }
+}
+
 static bool handle(const ui_event_t *ev)
 {
     bool ptt_up = (ev->type == UI_EVENT_KEY_RELEASE) && (ev->key == UI_KEY_PTT);
+    bool end = ptt_up;
     uint32_t tot = tx.channel.tot * TOT_UNIT_S;
 
     if (sequence.length) {
         return handle_sequence(ev);
     }
-    if (signal_keys(ev)) {
+    if (tx.latched) {
+        // the PTT is up: its press ends the transmission (its release then goes to the screen under this one), RED
+        // too; the timer closes the timeout page
+        end = (ev->type == UI_EVENT_KEY_PRESS) && ((ev->key == UI_KEY_PTT) || (ev->key == UI_KEY_RED));
+        if ((ev->type == UI_EVENT_TIMER) && ((tx.state == TX_TIMEOUT) || (tx.state == TX_NO_REPEATER))) {
+            end = true;
+        }
+        if (ptt_up) {
+            return false;
+        }
+    } else if (ptt_up && latch_allowed(ev)) {
+        end_signal(); // a 1750 Hz / DTMF key held with it
+        tx.latched = true;
+        return true;
+    }
+    if (!end && signal_keys(ev)) {
         return false;
     }
-    if (ptt_up) {
-        if (signal_key != UI_KEY_COUNT) {
-            radio_tx_signal(0, 0);
-            sound_play(NULL);
-            signal_key = UI_KEY_COUNT;
-        }
+    if (end) {
+        end_signal();
         if ((tx.state == TX_ON) && !dmr()) {
             aprs_after_ptt(); // the PTT mode's beacon
+        }
+        if (tx.latched && (ev->key == UI_KEY_RED)) {
+            ui_key_beep(NULL);
         }
         stop();
         ui_timer_stop();
@@ -358,12 +394,18 @@ static bool handle(const ui_event_t *ev)
                     stop();
                     tx.state = TX_NO_REPEATER;
                     sound_play(SOUND_ERROR);
+                    if (tx.latched) {
+                        ui_timer_start(LATCH_END_MS); // no PTT to release
+                    }
                     return true;
                 }
                 if ((tot > 0) && (elapsed_s() >= tot)) {
                     stop();
                     tx.state = TX_TIMEOUT;
                     sound_play(SOUND_TX_TIMEOUT);
+                    if (tx.latched) {
+                        ui_timer_start(LATCH_END_MS);
+                    }
                     return true;
                 }
                 if ((tot > 0) && ((tot - elapsed_s()) <= (settings.tx_timeout_beep_x5_secs * TOT_BEEP_S)) &&
@@ -427,12 +469,12 @@ static void draw_refused(void)
 
     if (tx.state == TX_NO_REPEATER) {
         snprintf(big, sizeof(big), "%s", text(TEXT_UI_NO_REPEATER));
-        hint = text(TEXT_UI_RELEASE_PTT);
+        hint = tx.latched ? NULL : text(TEXT_UI_RELEASE_PTT); // latched: it closes by itself
     } else if (timeout) {
         uint32_t tot = tx.channel.tot * TOT_UNIT_S;
 
         snprintf(big, sizeof(big), "%lu:%02lu", (unsigned long)(tot / 60), (unsigned long)(tot % 60));
-        hint = text(TEXT_UI_RELEASE_PTT);
+        hint = tx.latched ? NULL : text(TEXT_UI_RELEASE_PTT); // latched: it closes by itself
     } else if (tx.refused == RADIO_TX_RX_ONLY) {
         snprintf(big, sizeof(big), "%s", text(TEXT_RX_ONLY));
         hint = text(TEXT_UI_RX_ONLY_HINT);

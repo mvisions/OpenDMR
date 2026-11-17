@@ -993,7 +993,8 @@ static bool vox_wanted(void)
 
 static void vox_post(bool press)
 {
-    ui_event_t ev = {.type = press ? UI_EVENT_KEY_PRESS : UI_EVENT_KEY_RELEASE, .key = UI_KEY_PTT};
+    ui_event_t ev = {.type = press ? UI_EVENT_KEY_PRESS : UI_EVENT_KEY_RELEASE, .key = UI_KEY_PTT,
+                     .what = UI_KEY_FROM_VOX};
 
     ui_post(&ev);
 }

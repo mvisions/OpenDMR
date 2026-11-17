@@ -247,7 +247,9 @@ While transmitting:
 - **FM**: **SK2** sends the 1750 Hz repeater tone; the digits send DTMF;
 - Start / end tones, MDC1200 and the tail elimination are set in Sound options → FM Tx tones;
 - **VOX**: Sound options → VOX Thres. (0 = off) and VOX Tail;
-- **PTT latch** (Radio options): one press of the PTT starts transmitting, another one stops.
+- **PTT latch** (Radio options): the transmission goes on after the PTT is released; another press of the PTT (or
+  RED) ends it. Only on a channel with a TX timeout (TOT), so it never transmits without end, and the timeout ends it;
+  not for VOX.
 
 ---
 
@@ -436,7 +438,7 @@ these settings.**
 | Scan delay, Scan dwell, Scan mode, Scan On Boot | See [7](#7-scanning) |
 | Boot screen | Boot screen and boot melody at power on (off by default: straight to the main screen) |
 | VHF / 220 / UHF Squelch | Default squelch of the channels of each band |
-| PTT latch | One press of the PTT starts transmitting, another one stops |
+| PTT latch | One press of the PTT starts transmitting, another one stops; needs the channel's TOT |
 | Allow PC | Off / On / PTT (a private call heard: the PTT calls back) |
 | Default Power | Power of a new channel and of a VFO used the first time (each keeps its own after), and of old channels set to "radio" |
 | Power To All | The default power into every channel and VFO A / B (asked first) |

@@ -89,13 +89,16 @@ typedef enum {
 #define UI_DATA_CPS        0x0040 // cps_screen.c: the CPS opened, rendered or closed its screen, or more data went
 #define UI_DATA_GPS        0x0080 // gps.c: the fix came or went (the status bar's GPS icon)
 
+// What a key event comes from, besides a key (0)
+#define UI_KEY_FROM_VOX 0x0001 // radio.c: the VOX's PTT press and release
+
 typedef struct {
     ui_event_type_t type;
     uint8_t key;
     uint8_t modifiers;
     bool long_press;
     int16_t steps;
-    uint16_t what;
+    uint16_t what; // UI_EVENT_DATA: UI_DATA_x; a key event: UI_KEY_FROM_x, 0 from a key
 } ui_event_t;
 
 // The channel of a screen (ui_screen_t.channel) besides a channel, or NULL (none: the receiver off)
