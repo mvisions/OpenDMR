@@ -36,6 +36,7 @@
 #include "settings.h"
 #include "language.h"
 #include "display.h"
+#include "theme.h"
 #include "extra_options.h"
 #include "text.h"
 #include "options.h"
@@ -173,20 +174,23 @@ static const ui_custom_t time_shown = {
     .change = time_shown_change,
 };
 
-// The themes (theme.h, their names in the language shown), then auto (light by day): display.c
+// The themes (theme.h: the built-in ones and the user's, their names in the language shown), then auto (light by
+// day): display.c
 static void theme_format(char *buffer, size_t size)
 {
-    const theme_t *theme = theme_get(display_theme_choice());
+    uint8_t choice = display_theme_choice();
 
-    snprintf(buffer, size, "%s", (theme ? theme->name[(language_get() < 3) ? language_get() : 0] : text(TEXT_AUTO)));
+    if (choice == THEME_ID_AUTO) {
+        snprintf(buffer, size, "%s", text(TEXT_AUTO));
+    } else {
+        theme_name(choice, buffer, (uint32_t)size);
+    }
 }
 
 static void theme_change(int direction, uint8_t modifiers)
 {
-    uint8_t count = display_theme_choices();
-
     (void)modifiers;
-    display_theme_choose((uint8_t)((display_theme_choice() + count + ((direction > 0) ? 1 : -1)) % count));
+    display_theme_step(direction);
 }
 
 static const ui_custom_t theme_item = {

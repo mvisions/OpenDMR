@@ -63,12 +63,21 @@ typedef struct {
     uint32_t colours[THEME_COLOUR_COUNT];
 } theme_t;
 
-void theme_init(void);                        // sets the LCD palette; call once the LCD type is known
-uint8_t theme_count(void);
-const theme_t *theme_get(uint8_t index);      // NULL past the last
-uint8_t theme_first(bool dark);               // the first dark (or light) one
-void theme_set(uint8_t index);                // its palette: the whole screen changes at once
-uint8_t theme_current(void);
+// The themes of the menu: the built-in ones (themes.c), each of them recoloured or hidden by the user, then the
+// user's own, as the CPS writes them in the codeplug (OpenDMR's custom data block "DT" 7, theme.c). A theme is known by
+// its id, kept when the list changes: a built-in one by its place in themes.c, the user's from THEME_ID_USER
+#define THEME_ID_USER  0x40
+#define THEME_ID_USERS 8
+#define THEME_ID_AUTO  0xFE // not a theme: display.c's auto choice
+
+void theme_init(void);                        // the user's themes read, the LCD palette set; once the LCD type is known
+uint8_t theme_count(void);                    // the themes of the menu
+uint8_t theme_id(uint8_t index);              // the id of the menu's theme at that place
+int theme_index(uint8_t id);                  // the place of that theme in the menu; -1: not there (hidden, none)
+void theme_name(uint8_t id, char *buffer, uint32_t size); // in the language shown
+uint8_t theme_first(bool dark);               // the first dark (or light) theme of the menu
+void theme_set(uint8_t id);                   // its palette: the whole screen changes at once; not there: the first one
+uint8_t theme_current(void);                  // its id
 uint16_t theme_colour(theme_colour_t colour); // native colour format
 // The WCAG contrast of two colours of the theme in use, 1 - 21 (an icon on a fill shows from about 2.5)
 float theme_contrast(theme_colour_t a, theme_colour_t b);

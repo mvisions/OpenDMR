@@ -141,22 +141,29 @@ void display_light_tick(uint32_t elapsed_ms)
 #define AUTO_LIGHT_FROM 7  // local hours of the light theme in auto
 #define AUTO_LIGHT_TO   19
 
-uint8_t display_theme_choices(void)
-{
-    return (uint8_t)(theme_count() + 1);
-}
-
+// The choice is kept as a theme id (theme.h) or THEME_ID_AUTO. None yet (0xFF), a theme no longer in the menu (hidden
+// or deleted by the CPS) and 6 (auto before the user's themes, then the place after the 6 built-in ones): auto
 uint8_t display_theme_choice(void)
 {
     uint8_t choice = extra_options_theme();
 
-    return (choice < display_theme_choices()) ? choice : (uint8_t)(display_theme_choices() - 1); // none yet: auto
+    return ((choice == THEME_ID_AUTO) || (theme_index(choice) < 0)) ? THEME_ID_AUTO : choice;
 }
 
 void display_theme_choose(uint8_t choice)
 {
-    extra_options_set_theme((choice < display_theme_choices()) ? choice : 0);
+    extra_options_set_theme(choice);
     display_theme_apply();
+}
+
+void display_theme_step(int direction)
+{
+    uint8_t count = theme_count();
+    uint8_t choice = display_theme_choice();
+    int at = (choice == THEME_ID_AUTO) ? count : theme_index(choice); // auto after the themes
+
+    at = (at + count + 1 + ((direction > 0) ? 1 : -1)) % (count + 1);
+    display_theme_choose((at == count) ? THEME_ID_AUTO : theme_id((uint8_t)at));
 }
 
 // The local hour (settings.timezone: quarters from UTC, 64 = UTC, in the lower 7 bits); -1: no clock
@@ -177,7 +184,7 @@ void display_theme_apply(void)
     uint8_t choice = display_theme_choice();
     uint8_t wanted = choice;
 
-    if (choice == (display_theme_choices() - 1)) { // auto
+    if (choice == THEME_ID_AUTO) {
         int hour = local_hour();
 
         wanted = theme_first(!((hour >= AUTO_LIGHT_FROM) && (hour < AUTO_LIGHT_TO)));
