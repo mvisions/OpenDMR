@@ -28,7 +28,8 @@
 
 /*
  * OpenDMR, screen: the FM broadcast radio (uiFMRadio.c, docs/manual fm-radio.png): the frequency large,
- * the RDS station name, the 87 - 108 MHz dial, the RDS radio text, stereo in the status bar.
+ * the RDS station name, the signal (dBm, estimated, and segments), the 87 - 108 MHz dial, the RDS radio text, stereo in
+ * the status bar.
  *
  *   rotary, LEFT / RIGHT: 100 kHz steps; # / *: seek up / down; digits: a frequency (999 is 99.9 MHz, 1071 107.1 MHz);
  *   left key: squelch on / off (muted when the receiver finds no station); right key, SK1 or PTT: back (the receiver
@@ -57,9 +58,10 @@
 
 #define POLL_MS          20 // RDS: a group every 88 ms, the chip keeps the last one only
 #define STATUS_EVERY     15 // polls: the status every 300 ms
-#define FREQ_Y           52  // frequency with MHz, centred
-#define NAME_Y           112 // RDS station name, or "seeking"
-#define DIAL_Y           150 // dial: line, ticks, labels below
+#define FREQ_Y           46  // frequency with MHz, centred
+#define NAME_Y           100 // RDS station name, or "seeking"
+#define SIGNAL_Y         130 // the signal: dBm, then segments
+#define DIAL_Y           160 // dial: line, ticks, labels below
 #define TEXT_Y           196 // RDS radio text
 #define TEXT_LINES       3
 #define HINT_Y           260
@@ -68,6 +70,14 @@
 #define RSSI_BAR_OFFSET  16 // dBuV: status bar bars from the receiver's RSSI
 #define RSSI_BAR_STEP    6
 #define DIAL_MAJOR_EVERY 4 // MHz between labelled ticks
+// The receiver's RSSI (dBuV, uncalibrated) as dBm into 50 ohms (0 dBm is 107 dBuV): an estimate. Segments of 5 dB from
+// -100 dBm (none lit) to -40 dBm (all lit); measured here: -87 dBm on an empty channel, -42 dBm on a strong local station
+#define DBUV_TO_DBM        107
+#define SIGNAL_SEGMENTS    12
+#define SIGNAL_DBM_NONE    (-100)
+#define SIGNAL_DB_SEGMENT  5
+#define SIGNAL_READING     76 // width of the reading
+#define SIGNAL_GAP         3
 
 #define SAVED_DATA_TYPE 0x44540003 // a custom data block of this firmware ("DT", 3)
 #define SAVED_VERSION   1
@@ -335,6 +345,24 @@ static void draw_dial(uint16_t at)
                    THEME_COLOUR_ACCENT);
 }
 
+// "-62 dBm" and the segments, as high as its digits (roboto17: 12 rows from 4 below the top), lit in the receive
+// colour as the S meter
+static void draw_signal(void)
+{
+    char reading[12];
+    const int32_t dbm = (int32_t)status.rssi - DBUV_TO_DBM;
+    const int32_t bar_x = WIDGET_MARGIN + SIGNAL_READING;
+    const int32_t segment = (FB_WIDTH - WIDGET_MARGIN - bar_x - ((SIGNAL_SEGMENTS - 1) * SIGNAL_GAP)) / SIGNAL_SEGMENTS;
+    const int32_t lit = CLAMP((dbm - SIGNAL_DBM_NONE) / SIGNAL_DB_SEGMENT, 0, SIGNAL_SEGMENTS);
+
+    snprintf(reading, sizeof(reading), "%ld dBm", (long)dbm);
+    draw_text(WIDGET_MARGIN, SIGNAL_Y, reading, &font_roboto17, FONT_ALIGN_LEFT, THEME_COLOUR_TEXT_SECOND);
+    for (int32_t i = 0; i < SIGNAL_SEGMENTS; i++) {
+        draw_fill_rect(bar_x + (i * (segment + SIGNAL_GAP)), SIGNAL_Y + 4, segment, 12,
+                       (i < lit) ? THEME_COLOUR_RX : THEME_COLOUR_OFF);
+    }
+}
+
 static void draw(void)
 {
     char buffer[48];
@@ -371,6 +399,7 @@ static void draw(void)
         draw_text(FB_WIDTH / 2, NAME_Y, fm_broadcast_rds_name(), &font_roboto22, FONT_ALIGN_CENTER, THEME_COLOUR_RX);
     }
 
+    draw_signal();
     draw_dial(status.frequency);
     draw_wrapped(TEXT_Y, fm_broadcast_rds_text(), &font_roboto17, THEME_COLOUR_TEXT_SECOND);
     draw_text(FB_WIDTH / 2, HINT_Y, text(TEXT_UI_FM_HINT), &font_roboto17, FONT_ALIGN_CENTER, THEME_COLOUR_TEXT_DIM);
