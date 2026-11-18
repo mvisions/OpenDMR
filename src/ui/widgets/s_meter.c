@@ -70,8 +70,9 @@ void s_meter_draw(int32_t y, const s_meter_data_t *data)
     const int32_t bar_x = WIDGET_MARGIN + (data->compact ? COMPACT_READING : 0);
     const int32_t width = FB_WIDTH - WIDGET_MARGIN - bar_x;
     const int32_t segment = (width - ((SEGMENTS - 1) * GAP)) / SEGMENTS;
-    const int32_t bar_height = (data->compact ? 10 : 12);
-    const int32_t bar_y = (data->compact ? (y + 7) : (y + 30));
+    // compact: as high as the reading's capitals and digits beside it (roboto20: 14 rows from 5 below the top)
+    const int32_t bar_height = (data->compact ? 14 : 12);
+    const int32_t bar_y = (data->compact ? (y + 5) : (y + 30));
     char reading[12];
 
     draw_fill_rect(0, y, FB_WIDTH, (data->compact ? S_METER_COMPACT_HEIGHT : S_METER_HEIGHT), THEME_COLOUR_BACKGROUND);
@@ -97,7 +98,7 @@ void s_meter_draw(int32_t y, const s_meter_data_t *data)
         bool lit = ((i < 9) ? (i < data->s_units) : (((i - 9) * 10) < data->over_s9));
 
         draw_fill_rect(x, bar_y, segment, bar_height,
-                       (lit ? ((i < 9) ? THEME_COLOUR_RX : THEME_COLOUR_TX) : THEME_COLOUR_LINE));
+                       (lit ? ((i < 9) ? THEME_COLOUR_RX : THEME_COLOUR_TX) : THEME_COLOUR_OFF));
 
         if (!data->compact && scale[i]) {
             draw_text(x + (segment / 2), bar_y + bar_height + 4, scale[i], &font_roboto12, FONT_ALIGN_CENTER,

@@ -38,13 +38,13 @@ const theme_t theme_sunlight = {
     .colours = {
         0xFFFFFF, // background
         0x7A8696, // line: the separators of the main area
-        0xC2CAD3, // off
+        0xDDE2E8, // off
         0x2E3A48, // dim text
         0x101820, // labels
         0x000000, // second text
         0x000000, // text
         0xB0420A, // accent
-        0x009E4A, // receive
+        0x008A3E, // receive
         0xE0102E, // transmit
         0x8A5600, // warning
         0xFFFFFF, // on the receive / transmit / warning fills
