@@ -231,7 +231,11 @@ static uint32_t now_ms(void)
 // The event log (ms, event, arg) for the delays, read over the cable (cleared by writing p25_ev_n 0): 1 the key, 2 an
 // LDU into the FIFO (arg: its number), 3 the RF on (p25_phy_tx_begin() done), 10 a data unit received (arg: DUID),
 // 11 the playback on, 12 the playback starts; from DMR (p25_ev_log()), to compare: 20 its playback starts, 21 its key
+#ifdef OPENDMR_DEBUG
 #define P25_EV 64
+#else
+#define P25_EV 1 // the first event only (Makefile DEBUG)
+#endif
 struct {
     uint32_t ms;
     uint16_t event, arg;

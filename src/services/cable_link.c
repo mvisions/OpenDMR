@@ -109,7 +109,7 @@ static uint32_t fast_since = 0;
 #define SECTOR_IGNORED (-2)
 
 static int32_t write_sector = SECTOR_NONE;
-static uint8_t sector_buffer[FLASH_SECTOR_SIZE];
+static uint8_t sector_buffer[FLASH_SECTOR_SIZE]; // also the debug commands' (cable_link_sector_buffer())
 
 static StaticTask_t task_tcb;
 static StackType_t task_stack[512];
@@ -251,6 +251,11 @@ static uint32_t request_u32(int at)
 {
     return ((uint32_t)request[at] << 24) | ((uint32_t)request[at + 1] << 16) | ((uint32_t)request[at + 2] << 8) |
            request[at + 3];
+}
+
+uint8_t *cable_link_sector_buffer(void)
+{
+    return (write_sector == SECTOR_NONE) ? sector_buffer : NULL;
 }
 
 // 'X': the CPS writes the codeplug a 4 KB sector at a time, in the window of the flash

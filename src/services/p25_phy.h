@@ -37,7 +37,11 @@
 // modem to the physical layer, records the blocks into p25_phy_buf and switches back when it is full.
 
 #define P25_PHY_BLOCK_BYTES 36
+#ifdef OPENDMR_DEBUG
 #define P25_PHY_BLOCKS      64 // 1.9 s
+#else
+#define P25_PHY_BLOCKS      1 // no capture without DEBUG (Makefile): p25_phy_capture() left out
+#endif
 
 typedef struct {
     uint32_t us;    // systime_get_us() at the system interrupt
@@ -107,7 +111,11 @@ void p25_phy_tx_end(void);
 
 // The transmit log: event 0 begin / end (arg 0 before the set up, 1 the send enabled, 2 the end), 1 the transmit
 // interrupt (arg its number)
+#ifdef OPENDMR_DEBUG
 #define P25_PHY_TXLOG 64
+#else
+#define P25_PHY_TXLOG 1 // the first event only (Makefile DEBUG)
+#endif
 typedef struct {
     uint32_t us;     // systime_get_us()
     uint32_t status; // LAYER2_STATUS: [31] tx_slot_choose, [8:0] tx_bit_cnt

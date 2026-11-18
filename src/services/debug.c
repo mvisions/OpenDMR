@@ -52,8 +52,8 @@
 #include "debug.h"
 #include "flash.h"
 #include "font_cjk.h"
+#include "cable_link.h"
 
-static uint8_t font_sector[FLASH_SECTOR_SIZE]; // the Chinese font sector being uploaded
 
 uint32_t (*debug_app_command)(volatile uint8_t *request, volatile uint8_t *reply, uint32_t reply_size) = NULL;
 
@@ -198,8 +198,10 @@ uint32_t debug_handle_command(volatile uint8_t *request, volatile uint8_t *reply
         case 'Z': { // the scratch buffer of the font upload: not at the same time
             uint32_t length = (request[6] << 8) | request[7];
             uint32_t n = 0;
+            uint8_t *font_sector = cable_link_sector_buffer();
 
-            if ((length > 0) && (length <= sizeof(font_sector)) && flash_read(address, font_sector, length)) {
+            if (font_sector && (length > 0) && (length <= FLASH_SECTOR_SIZE) &&
+                flash_read(address, font_sector, length)) {
                 n = pack(font_sector, length, &reply[5], reply_size - 5);
             }
             reply[2] = (n > 0) ? 1 : 0;
@@ -208,7 +210,8 @@ uint32_t debug_handle_command(volatile uint8_t *request, volatile uint8_t *reply
             reply_length = 5 + n;
         } break;
 
-        case 'F': {
+        case 'F': { // the Chinese font sector being uploaded, in the cable link's sector buffer
+            uint8_t *font_sector = cable_link_sector_buffer();
             uint8_t part = request[6];
             uint16_t sum = (request[7] << 8) | request[8];
 
@@ -218,7 +221,7 @@ uint32_t debug_handle_command(volatile uint8_t *request, volatile uint8_t *reply
                 sum -= request[9 + i];
             }
 
-            if ((sum == 0) && (address >= FONT_CJK_FLASH_ADDRESS) && (address < FONT_CJK_FLASH_END) &&
+            if (font_sector && (sum == 0) && (address >= FONT_CJK_FLASH_ADDRESS) && (address < FONT_CJK_FLASH_END) &&
                 ((address % FLASH_SECTOR_SIZE) == 0) && (part < 4)) {
                 memcpy(&font_sector[part * 1024], (uint8_t *)&request[9], 1024);
                 reply[2] = 1;

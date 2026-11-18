@@ -47,4 +47,9 @@ bool cable_link_is_busy(void);
 // A request being handled, or one handled in the last ms milliseconds (the watchdog: dm32dbg.py reading a stalled radio)
 bool cable_link_used_within(uint32_t ms);
 
+// The CPS write's 4 KB sector buffer lent to the debug commands of the same task (debug.c: the font upload, the
+// packed read): NULL while a CPS write holds a sector. The two are never used at once (a font upload's 4 parts
+// and a CPS write's sector must not interleave)
+uint8_t *cable_link_sector_buffer(void);
+
 #endif

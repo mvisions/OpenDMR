@@ -74,7 +74,11 @@ typedef struct {
 extern volatile p25_radio_stats_t p25_radio_stats;
 
 // for tools/debug/p25_monitor.py: the blocks as received (the modem's order) and the calls, read over the cable
+#ifdef OPENDMR_DEBUG
 #define P25_TAP_BLOCKS 128 // 3.8 s
+#else
+#define P25_TAP_BLOCKS 1 // the last block only (Makefile DEBUG)
+#endif
 typedef struct {
     uint32_t ms;   // when it came (the interrupt, ms)
     uint32_t type; // RX_TYPE_INFO

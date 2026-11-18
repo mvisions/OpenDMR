@@ -32,8 +32,16 @@ ifeq ($(RX_CAPTURE),1)
 CFLAGS  += -DRX_CAPTURE
 endif
 ASFLAGS := $(CPU) $(addprefix -I,$(INCDIRS)) -MMD -MP
-LDFLAGS := $(CPU) -nostartfiles -Wl,--gc-sections -Wl,--undefined=vocoder_bench -Wl,--undefined=serial_update_marker \
-           -Wl,--undefined=p25_phy_capture -Wl,--undefined=p25_phy_stop -Wl,--undefined=p25_phy_tx_test -Wl,--undefined=nxdn_af_capture -Wl,--undefined=imbe_enc_test -Wl,-Map,$(TARGET).map -T ckcpu.ld
+# make clean && make DEBUG=1: the logs and the test functions of tools/debug kept (the mic levels, the P25 tap,
+# capture, transmit log and transmit test, the NXDN AF capture, the DMR transmit trace, the vocoder benches). Off by
+# default: their rings are 1 entry long and the functions only called over the cable are left out (some 26 KB of RAM)
+ifeq ($(DEBUG),1)
+CFLAGS  += -DOPENDMR_DEBUG
+DEBUG_KEEP := -Wl,--undefined=vocoder_bench -Wl,--undefined=p25_phy_capture -Wl,--undefined=p25_phy_stop \
+              -Wl,--undefined=p25_phy_tx_test -Wl,--undefined=nxdn_af_capture -Wl,--undefined=imbe_enc_test
+endif
+LDFLAGS := $(CPU) -nostartfiles -Wl,--gc-sections -Wl,--undefined=serial_update_marker $(DEBUG_KEEP) \
+           -Wl,-Map,$(TARGET).map -T ckcpu.ld
 LIBS    := -lm -lc -lgcc
 
 # Layers, see docs/architecture.md

@@ -95,9 +95,14 @@ volatile uint8_t DMR_frame_buffer[DMR_FRAME_BUFFER_SIZE];
 // DMR Tx trace (repeater wake-up, and any transmission), read with tools/debug (dm32dbg.py mr dmrWakeTrace 772): while waking a repeater, each
 // timeslot interrupt (kind 2), received frame (kind 1), Tx interrupt (kind 3), RF receive start (kind 4), PA at full drive
 // (kind 5) and PA off (kind 6, hrc7000TraceRf()): time in us, kind | slotState << 8 | timeCode << 16 | rxTSToggled << 24,
-// RX_TYPE_INFO. 64 entries, dmrWakeTraceIndex counts them all.
+// RX_TYPE_INFO. 64 entries (1 without DEBUG, Makefile), dmrWakeTraceIndex counts them all.
 volatile uint32_t dmrWakeTraceIndex = 0;
-volatile uint32_t dmrWakeTrace[64][3];
+#ifdef OPENDMR_DEBUG
+#define WAKE_TRACE 64
+#else
+#define WAKE_TRACE 1 // the last entry only (Makefile DEBUG)
+#endif
+volatile uint32_t dmrWakeTrace[WAKE_TRACE][3];
 // Repeater mode (Rx != Tx frequency), as the stock firmware DM32.01.L01.048 (disassembly; addresses of that firmware):
 // passive Tx timing to send the wake-up CSBK, the modem left as it is after the burst, a receive reset after a few
 // silent timeslots, a repeater Idle frame as the wake-up answer, and RF_MODE / RF_CONTROL set for repeater mode.
@@ -837,7 +842,7 @@ static inline void hrc7000SysReceivedDataInt(void)
 	uint32_t reg51 = *RX_TYPE_INFO;
 	if ((hrc.isWaking != WAKING_MODE_NONE) || hrc.transmissionEnabled)
 	{
-		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ & 63];
+		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ % WAKE_TRACE];
 
 		t[0] = systime_get_us();
 		t[1] = 1 | (slotState << 8) | ((hrc.timeCode & 0xFF) << 16) | ((hrc.rxTSToggled & 0xFF) << 24);
@@ -1418,7 +1423,7 @@ void RAM_CODE hrc7000TimeslotInterruptHandler(void)
 	int receivedTimeCode = (uint8_t)((*RX_TYPE_INFO >> 22) & 0x01);
 	if ((hrc.isWaking != WAKING_MODE_NONE) || hrc.transmissionEnabled)
 	{
-		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ & 63];
+		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ % WAKE_TRACE];
 
 		t[0] = systime_get_us();
 		t[1] = 2 | (slotState << 8) | ((hrc.timeCode & 0xFF) << 16) | ((hrc.rxTSToggled & 0xFF) << 24);
@@ -1944,7 +1949,7 @@ void hrc7000TxInterruptHandler(void)
 {
 	if ((hrc.isWaking != WAKING_MODE_NONE) || hrc.transmissionEnabled)
 	{
-		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ & 63];
+		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ % WAKE_TRACE];
 
 		t[0] = systime_get_us();
 		t[1] = 3 | (slotState << 8) | ((hrc.timeCode & 0xFF) << 16) | ((hrc.rxTSToggled & 0xFF) << 24); // kind 3: Tx interrupt (RF on)
@@ -1968,7 +1973,7 @@ void hrc7000TraceRf(uint32_t kind)
 	if ((hrc.isWaking != WAKING_MODE_NONE) || hrc.transmissionEnabled)
 	{
 		uint32_t psr = irq_save();
-		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ & 63];
+		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ % WAKE_TRACE];
 
 		t[0] = systime_get_us();
 		t[1] = kind | (slotState << 8) | ((hrc.timeCode & 0xFF) << 16) | ((hrc.rxTSToggled & 0xFF) << 24);
@@ -1984,7 +1989,7 @@ void RAM_CODE hrc7000RfRxInterruptHandler(void)
 {
 	if ((hrc.isWaking != WAKING_MODE_NONE) || hrc.transmissionEnabled)
 	{
-		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ & 63];
+		volatile uint32_t *t = dmrWakeTrace[dmrWakeTraceIndex++ % WAKE_TRACE];
 
 		t[0] = systime_get_us();
 		t[1] = 4 | (slotState << 8) | ((hrc.timeCode & 0xFF) << 16) | ((hrc.rxTSToggled & 0xFF) << 24); // kind 4: RF receive start (RF off)

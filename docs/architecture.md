@@ -102,7 +102,7 @@ FreeRTOS 数字越大优先级越高。原 uC/OS 是数字越小越高：主任�
 | 声码器 / 升级区 | 0x00044400 ~ 0x00056F24（74.8 KB，`ckcpu.ld` 的 `__update_area_start/end`） | 我们的声码器（`.vocoder_overlay`），第一次 DMR 编解码时 `vocoder_sync()` 从 Flash 拷入；不支持原厂编解码器。声码器占 53.4 KB：编码器代码（放 RAM 是为了避开 Flash 总线干扰话筒）、常用的表（`AMBE_RAM_DATA`，`.vocoder_rodata`）、编解码状态；解码器代码留在有缓存的 Flash 里，那样更快 |
 | 升级程序 | 0x00044400 | 数据线升级时由固件里的装载器放到这里运行（见第 8 节），这时收发已停 |
 
-RAM 已经很紧（原固件 bss 约 145 KB）。任务栈大小要按实测的高水位来定（`uxTaskGetStackHighWaterMark`）。g_top_irqstack 到 0x44400 之间约 40 KB 是空的，写频线调试工具（跳板、大栈）用它。
+RAM 已经很紧（原固件 bss 约 145 KB）。任务栈大小要按实测的高水位来定（`uxTaskGetStackHighWaterMark`）。g_top_irqstack 到 0x44400 之间是空的，写频线调试工具（跳板、大栈）用它：2026-11-18 的发行版约 29.8 KB。调试用的记录和测试函数（话筒电平、P25 监听 / 抓取 / 发射日志 / 发射测试、NXDN 鉴频抓取、DMR 发射跟踪、声码器测速，约 26 KB）只在 `make DEBUG=1` 里完整保留，发行版里记录只留 1 条，测试函数不链接；`tools/debug` 里对应的工具要用调试版。
 
 **代码放 RAM 还是 Flash**（2026-11-06 实测）：RAM 只有一个端口，取指令要等数据访问，所以小循环在有缓存的 Flash 里反而更快（解码器 2.13 ms 对 2.48 ms）；但随机查的大表放 Flash 很慢（缓存装不下），要放 RAM。例外是 DMR 编码器的代码：放 Flash 时发射的话音变差，Flash 总线活动串进了话筒。
 

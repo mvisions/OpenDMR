@@ -76,7 +76,11 @@ static int32_t agc_gain = AGC_GAIN_ONE;
 // The mic's level while transmitting, read over the cable afterwards (tools/debug/miclevel.py: the cable's plug
 // switches the radio's own mic off): per 10 ms buffer the smallest and largest sample and the variance around the
 // buffer's mean (the mic has a DC of about 2470) / 16, the last MIC_LEVELS buffers of the last transmission
+#ifdef OPENDMR_DEBUG
 #define MIC_LEVELS 1024
+#else
+#define MIC_LEVELS 1 // the last buffer only (Makefile DEBUG)
+#endif
 typedef struct {
     int16_t min;
     int16_t max;
