@@ -61,8 +61,6 @@
 #define COL2_X       132
 #define VALUE_DX     40
 #define REFRESH_MS   1000
-#define TZ_UTC       64 // settings.timezone: lower 7 bits, quarters of an hour from UTC - 64
-#define TZ_MASK      0x7F
 
 static gps_data_t gps; // about 210 bytes: not on the UI task stack
 
@@ -292,7 +290,7 @@ static void draw(void)
     // UTC and the local time of the timezone setting
     format_time(buffer, sizeof(buffer), 0);
     draw_info(WIDGET_MARGIN, INFO_Y + (2 * INFO_LINE), text(TEXT_UTC), buffer);
-    format_time(buffer, sizeof(buffer), ((settings.timezone & TZ_MASK) - TZ_UTC) * (15 * 60));
+    format_time(buffer, sizeof(buffer), datetime_local_offset(datetime_now()));
     draw_info(COL2_X, INFO_Y + (2 * INFO_LINE), text(TEXT_LOCAL), buffer);
 
     snprintf(buffer, sizeof(buffer), "GPS %s", text(on ? TEXT_ON : TEXT_OFF));

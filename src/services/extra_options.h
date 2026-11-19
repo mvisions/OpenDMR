@@ -36,6 +36,7 @@
 #define EXTRA_OPTION_HIDE_CALLER_PLACE (1UL << 0) // the DMR caller panel without the city and state (qso_panel.c)
 // bit 1: the receive log (rx_log.h, a test firmware: 0.4.1-debug): set on radios that ran it, so not reused
 #define EXTRA_OPTION_HIDE_RECENT_CALLERS (1UL << 2) // the channel screen's last two callers (off: shown)
+#define EXTRA_OPTION_AUTO_TIMEZONE       (1UL << 3)
 
 // APRS "Send via": bits 1..2 of the same block, a 2 bit value (0: AFSK, 1: DMR, 2: both)
 #define APRS_VIA_AFSK 0u

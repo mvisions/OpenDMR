@@ -158,6 +158,22 @@ static const ui_custom_t timezone = {
     .change = timezone_change,
 };
 
+static void auto_timezone_format(char *buffer, size_t size)
+{
+    snprintf(buffer, size, "%s", text(extra_option(EXTRA_OPTION_AUTO_TIMEZONE) ? TEXT_ON : TEXT_OFF));
+}
+
+static void auto_timezone_change(int direction, uint8_t modifiers)
+{
+    (void)modifiers;
+    extra_option_set(EXTRA_OPTION_AUTO_TIMEZONE, direction > 0);
+}
+
+static const ui_custom_t auto_timezone = {
+    .format = auto_timezone_format,
+    .change = auto_timezone_change,
+};
+
 static void time_shown_format(char *buffer, size_t size)
 {
     snprintf(buffer, size, "%s", text((settings.timezone & TIMEZONE_LOCAL) ? TEXT_LOCAL : TEXT_UTC));
@@ -239,6 +255,7 @@ static const ui_item_t display_options_items[] = {
     {TEXT_BACKLIGHT_TIMEOUT, ICONS_COUNT, UI_ITEM_NUMBER, &backlight_timeout, NULL},
     {TEXT_AUTO_NIGHT, ICONS_COUNT, UI_ITEM_BIT, &auto_night, NULL},
     {TEXT_LEDS, ICONS_COUNT, UI_ITEM_BIT, &leds, NULL},
+    {TEXT_AUTO_TIMEZONE, ICONS_COUNT, UI_ITEM_CUSTOM, &auto_timezone, NULL},
     {TEXT_TIMEZONE, ICONS_COUNT, UI_ITEM_CUSTOM, &timezone, NULL},
     {TEXT_TIME, ICONS_COUNT, UI_ITEM_CUSTOM, &time_shown, NULL},
     {TEXT_CALLER_PLACE, ICONS_COUNT, UI_ITEM_CUSTOM, &caller_place, NULL},

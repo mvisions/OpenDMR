@@ -415,6 +415,19 @@ bool gps_has_fix(void)
     return enabled && data.fix;
 }
 
+bool gps_position(int32_t *latitude, int32_t *longitude)
+{
+    taskENTER_CRITICAL();
+    bool valid = enabled && data.fix && data.has_position;
+
+    if (valid) {
+        *latitude = data.latitude;
+        *longitude = data.longitude;
+    }
+    taskEXIT_CRITICAL();
+    return valid;
+}
+
 void gps_read(gps_data_t *out)
 {
     taskENTER_CRITICAL();

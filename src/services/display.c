@@ -35,10 +35,12 @@
  * Manual: SK1 alone toggles it. Dim is display_backlight_percentage_off; a timeout of 0 keeps it lit. Only the input
  * task calls these, but the menu (display_apply_brightness()).
  *
- * Lit, it is the day brightness, or the night one when "Auto night" is on and it is night by the clock (the hours of
- * the auto theme's dark one; no clock: day).
+ * Lit, it is the day brightness, or the night one when "Auto night" is on and the auto theme's night period applies.
  */
 
+#include <math.h>
+#include "FreeRTOS.h"
+#include "task.h"
 #include "backlight.h"
 #include "settings.h"
 #include "radio.h"
@@ -46,29 +48,99 @@
 #include "datetime.h"
 #include "extra_options.h"
 #include "theme.h"
+#include "gps.h"
+#include "position.h"
 
 #define DEFAULT_PERCENT 100
 #define NIGHT_CHECK_MS  1000 // day or night looked at again while lit
 
-#define AUTO_LIGHT_FROM 7  // local hours of the day: the light theme in auto, the day brightness
+#define AUTO_LIGHT_FROM 7  // local hours without a position
 #define AUTO_LIGHT_TO   19
+#define DAY_SECONDS     86400U
+#define DEG_TO_RAD      0.017453292519943295
 
 static volatile bool lit = true;
 static volatile uint32_t light_left_ms; // 0: no timeout running
 static uint32_t night_check_ms;
 
-static int local_hour(void);
+static struct {
+    uint32_t minute;
+    int32_t latitude;
+    int32_t longitude;
+    bool night;
+} solar_cache;
 
-static bool is_night(void)
+// NOAA solar position approximation, evaluated at the current UTC minute.
+static bool solar_night(uint32_t utc, int32_t latitude, int32_t longitude)
 {
-    int hour = local_hour();
+    datetime_fields_t date;
+    datetime_to_fields(utc, &date);
+    uint16_t year = date.year;
+    uint32_t jan1 = datetime_from_fields(&(datetime_fields_t){.year = year, .month = 1, .day = 1});
+    bool leap = (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0));
+    double gamma = (360.0 * DEG_TO_RAD / (leap ? 366 : 365)) * ((utc - jan1) / 86400.0 - 0.5);
+    double c1 = cos(gamma);
+    double s1 = sin(gamma);
+    double c2 = cos(2.0 * gamma);
+    double s2 = sin(2.0 * gamma);
+    double equation = 229.18 * (0.000075 + 0.001868 * c1 - 0.032077 * s1 - 0.014615 * c2 - 0.040849 * s2);
+    double declination = 0.006918 - 0.399912 * c1 + 0.070257 * s1 - 0.006758 * c2 + 0.000907 * s2
+                       - 0.002697 * cos(3.0 * gamma) + 0.001480 * sin(3.0 * gamma);
+    double lat = latitude * 1E-5 * DEG_TO_RAD;
+    double solar_minutes = (utc % DAY_SECONDS) / 60.0 + equation + 4.0 * longitude * 1E-5;
+    double hour_angle = (solar_minutes / 4.0 - 180.0) * DEG_TO_RAD;
+    double cos_zenith = sin(lat) * sin(declination) + cos(lat) * cos(declination) * cos(hour_angle);
 
-    return (hour >= 0) && ((hour < AUTO_LIGHT_FROM) || (hour >= AUTO_LIGHT_TO));
+    return cos_zenith < -0.014538; // cos(90.833 degrees), the standard sunrise and sunset threshold
+}
+
+static bool valid_coordinates(int32_t latitude, int32_t longitude)
+{
+    return (latitude >= -9000000) && (latitude <= 9000000) &&
+           (longitude >= -18000000) && (longitude <= 18000000);
+}
+
+static bool is_night(bool no_clock)
+{
+    uint32_t utc = datetime_now();
+    int32_t latitude;
+    int32_t longitude;
+
+    if (utc < DATETIME_VALID_MIN) {
+        return no_clock;
+    }
+    if (gps_position(&latitude, &longitude) && valid_coordinates(latitude * 10, longitude * 10)) {
+        // Hundredths of a degree suffice for sunrise and sunset and keep GPS jitter out of the cache key.
+        latitude = (latitude / 100) * 1000;
+        longitude = (longitude / 100) * 1000;
+    } else if (!position_own(&latitude, &longitude) || !valid_coordinates(latitude, longitude)) {
+        int32_t offset = ((int32_t)(settings.timezone & 0x7F) - 64) * 900;
+        int hour = (int)(((utc % DAY_SECONDS + DAY_SECONDS + offset) % DAY_SECONDS) / 3600);
+
+        return (hour < AUTO_LIGHT_FROM) || (hour >= AUTO_LIGHT_TO);
+    }
+
+    uint32_t minute = utc / 60;
+    taskENTER_CRITICAL();
+    bool cached = (solar_cache.minute == minute) && (solar_cache.latitude == latitude) &&
+                  (solar_cache.longitude == longitude);
+    bool night = solar_cache.night;
+    taskEXIT_CRITICAL();
+    if (!cached) {
+        night = solar_night(minute * 60, latitude, longitude);
+        taskENTER_CRITICAL();
+        solar_cache.minute = minute;
+        solar_cache.latitude = latitude;
+        solar_cache.longitude = longitude;
+        solar_cache.night = night;
+        taskEXIT_CRITICAL();
+    }
+    return night;
 }
 
 static int lit_percent(void)
 {
-    bool night = ((settings.bitfield_options & SETTINGS_BIT_AUTO_NIGHT) != 0) && is_night();
+    bool night = ((settings.bitfield_options & SETTINGS_BIT_AUTO_NIGHT) != 0) && is_night(false);
     int percent = settings.display_backlight_percentage[night ? 1 : 0];
 
     if (!settings_valid() || (percent < 1) || (percent > 100)) {
@@ -189,28 +261,13 @@ void display_theme_step(int direction)
     display_theme_choose((at == count) ? THEME_ID_AUTO : theme_id((uint8_t)at));
 }
 
-// The local hour (settings.timezone: quarters from UTC, 64 = UTC, in the lower 7 bits); -1: no clock
-static int local_hour(void)
-{
-    datetime_fields_t fields;
-    uint32_t utc = datetime_now();
-
-    if (!datetime_is_valid() || (utc == 0)) {
-        return -1;
-    }
-    datetime_to_fields(utc + (((int32_t)(settings.timezone & 0x7F) - 64) * 900), &fields);
-    return fields.hour;
-}
-
 void display_theme_apply(void)
 {
     uint8_t choice = display_theme_choice();
     uint8_t wanted = choice;
 
     if (choice == THEME_ID_AUTO) {
-        int hour = local_hour();
-
-        wanted = theme_first(!((hour >= AUTO_LIGHT_FROM) && (hour < AUTO_LIGHT_TO)));
+        wanted = theme_first(is_night(true));
     }
     if (wanted != theme_current()) {
         theme_set(wanted);

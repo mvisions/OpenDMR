@@ -54,6 +54,8 @@ OBJS    := $(addprefix $(BUILD)/,$(C_SRCS:.c=.o) $(S_SRCS:.S=.o))            $(p
 all: $(TARGET)_BFUV32.bin $(TARGET).elf.asm
 	$(SIZE) $(TARGET).elf
 
+$(BUILD)/services/timezone_data.o: services/timezone-data/tzdb.bin
+
 $(TARGET).elf: $(OBJS) ckcpu.ld
 	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 

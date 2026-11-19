@@ -181,6 +181,7 @@ const char *const text_es[TEXT_COUNT] = {
     [TEXT_LOCATION] = "Ubicación",
     [TEXT_DATE] = "Fecha",
     [TEXT_TIMEZONE] = "Zona horaria",
+    [TEXT_AUTO_TIMEZONE] = "Zona horaria auto",
     [TEXT_SUSPEND] = "Suspender",
     [TEXT_PASS] = "Pase",
     [TEXT_ELEVATION] = "El",

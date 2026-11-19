@@ -485,13 +485,17 @@ colours and bands):
 
 | Theme | |
 |---|---|
-| Auto (the default) | Sunlight from 7:00 to 19:00 local time, Deep sea at night and without a clock |
+| Auto (the default) | Light theme from sunrise to sunset, dark theme overnight. Uses a GPS fix or the saved location. Without a location, daylight is 07:00–19:00 local time. Without a valid clock, the theme is dark. Auto night uses the same night period for backlight brightness |
 | Deep sea | Dark: navy, a sea blue band, cyan for what is selected |
 | Sunlight | Light, for outdoors: black text, every layer dark enough for bright light |
 | Clear sky | Light: white, a royal blue band, orange for what is selected |
 | Graphite | Dark: graphite and orange |
 | Night amber | Dark: amber on black, as night vision gear |
 | High contrast | Light: black on white, a black band, yellow for what is selected |
+
+In Display options, enable Auto timezone and select Local time to display local time including daylight saving.
+The radio uses a GPS fix or the saved location. The built-in database covers 2026–2040. The manual Timezone
+setting applies when the location has no match or the date is outside that range.
 
 <img src="manual/themes.png" alt="The six themes">
 

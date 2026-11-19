@@ -88,8 +88,9 @@ theme in Display options, not single colours:
 | Night amber | Dark | Amber on black, keeps the eyes dark adapted |
 | High contrast | Light | Black on white, a black band, yellow accent |
 
-- **Auto** (the default): the first light theme of the list (Sunlight) from 7:00 to 19:00 local time, the first dark
-  one (Deep sea) at night and without a clock;
+- **Auto** (the default): the first light theme from sunrise to sunset and the first dark theme overnight. Uses
+  a GPS fix or the saved location, falls back to 07:00–19:00 local time without a location and uses the dark theme
+  without a valid clock;
 - **Little grey**: the screen is small, low resolution and not bright, grey text is hard to read. Second text
   (frequency, talk group) is in the text colour, labels one step lighter; text of 22 px and less is not anti-aliased
   (`fb_set_solid_levels()`: half coverage or more is the colour, less nothing), the large fonts (32 px and up) keep

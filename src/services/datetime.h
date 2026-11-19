@@ -53,6 +53,7 @@ typedef struct {
 // The time as shown: in the time zone of the settings when they say local time (timezone bit 7), else UTC
 uint32_t datetime_shown(void);
 bool datetime_shown_is_utc(void);
+int32_t datetime_local_offset(uint32_t utc); // seconds east of UTC, with the manual offset as fallback
 void datetime_to_fields(uint32_t seconds, datetime_fields_t *fields);
 uint32_t datetime_from_fields(const datetime_fields_t *fields);
 

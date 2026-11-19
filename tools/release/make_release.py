@@ -31,12 +31,15 @@ DEFAULT_REPO = 'va3bpf/OpenDMR'
 CPS_REPO = 'va3bpf/opendmr-cps'
 CPS_FILE = 'opendmr-cps.html'
 FONT = 'tools/fonts/build/cjk.bin'
+TIMEZONE_DATA = 'src/services/timezone-data'
 
 # In the zip -> from the repository. Keep in step with the table of docs/installation.md
 FILES = {
     'opendmr.bin': 'src/build/opendmr.bin',
     'opendmr_BFUV32.bin': 'src/build/opendmr_BFUV32.bin',
     'cjk.bin': FONT,
+    'timezone-data/tzdb.bin': TIMEZONE_DATA + '/tzdb.bin',
+    'timezone-data/README.md': TIMEZONE_DATA + '/README.md',
     'tools/backup/dm32_dump.py': 'tools/backup/dm32_dump.py',
     'tools/backup/dumper/dumper.bin': 'tools/backup/dumper/dumper.bin',
     'tools/fonts/ttf/RobotoCondensed-VF.ttf': 'tools/fonts/ttf/RobotoCondensed-VF.ttf',
@@ -141,7 +144,11 @@ def pack(version, cps_path, cps_version):
     cps_asset = os.path.join(DIST, CPS_FILE)
     if os.path.abspath(cps_path) != os.path.abspath(cps_asset):
         shutil.copyfile(cps_path, cps_asset)
-    assets = [zip_path, cps_asset]
+    timezone_asset = os.path.join(DIST, name + '-timezone-data.zip')
+    with zipfile.ZipFile(timezone_asset, 'w', zipfile.ZIP_DEFLATED) as z:
+        for filename in ('tzdb.bin', 'README.md'):
+            z.write(os.path.join(ROOT, TIMEZONE_DATA, filename), filename)
+    assets = [zip_path, cps_asset, timezone_asset]
     sums = os.path.join(DIST, 'SHA256SUMS.txt')
     with open(sums, 'w', newline='\n') as f:
         for a in assets:

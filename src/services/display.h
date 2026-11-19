@@ -41,9 +41,8 @@ void display_light_start(void);      // at power on, after the settings
 void display_light_key(bool sk1_alone);
 void display_light_tick(uint32_t elapsed_ms); // input task, each pass
 
-// The theme (Display options -> Theme, extra_options.h): one of theme.h's, or auto (the first light one from 7:00 to
-// 19:00 local time, the first dark one at night and without a clock). From the UI task: at start, when the choice
-// changes and each minute.
+// Auto uses the first light theme by day and the first dark one at night or without a clock. The UI task applies
+// the theme at start, when the choice or GPS fix changes and each minute.
 uint8_t display_theme_choice(void);       // a theme id (theme.h), or THEME_ID_AUTO (the default)
 void display_theme_choose(uint8_t choice); // saved, applied
 void display_theme_step(int direction);   // the next (previous) of the menu's themes, then auto

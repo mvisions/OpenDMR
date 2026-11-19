@@ -181,6 +181,7 @@ const char *const text_zh[TEXT_COUNT] = {
     [TEXT_LOCATION] = "位置",
     [TEXT_DATE] = "日期",
     [TEXT_TIMEZONE] = "时区",
+    [TEXT_AUTO_TIMEZONE] = "自动时区",
     [TEXT_SUSPEND] = "暂停",
     [TEXT_PASS] = "过境",
     [TEXT_ELEVATION] = "仰角",

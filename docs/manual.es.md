@@ -363,13 +363,17 @@ Brillo diurno, brillo nocturno, brillo mínimo en reposo, modo de iluminación, 
 
 | Tema | Características |
 |---|---|
-| Auto (por defecto) | Aplica automáticamente Sunlight de 7:00 a 19:00 hora local y Deep sea de noche |
+| Auto (por defecto) | Tema claro del amanecer al atardecer y oscuro por la noche. Usa la posición GPS o la ubicación guardada. Sin ubicación, el horario diurno es de 07:00 a 19:00 en hora local. Sin un reloj válido, usa el tema oscuro. Noche auto usa el mismo horario nocturno para el brillo |
 | Deep sea | Modo oscuro: fondo azul marino oscuro con franja azul mar y selección en color cian |
 | Sunlight | Modo claro para exteriores: texto negro de alto contraste para visibilidad bajo luz solar directa |
 | Clear sky | Modo claro: fondo blanco con franja azul real y selección en naranja |
 | Graphite | Modo oscuro: grafito y naranja |
 | Night amber | Modo nocturno de bajo brillo: texto ámbar sobre negro para visión nocturna |
 | High contrast | Blanco y negro de máximo contraste con selección en amarillo |
+
+En las opciones de pantalla, activa Zona horaria auto y selecciona la hora local. La radio usa el GPS o la
+ubicación guardada para aplicar el horario de verano. La base incluida cubre 2026–2040. Si la ubicación no tiene
+coincidencia o la fecha queda fuera de ese intervalo, se usa la zona horaria manual.
 
 <img src="manual/themes.png" alt="Los seis temas visuales">
 

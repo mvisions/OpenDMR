@@ -79,7 +79,7 @@ volatile unsigned long freertos_assert_line = 0;
 // The screens that go over all others: the hotspot's (not while secured: security.h), the CPS's
 static bool screen_hooks(const ui_event_t *ev)
 {
-    if ((ev->type == UI_EVENT_DATA) && (ev->what & UI_DATA_TIME)) {
+    if ((ev->type == UI_EVENT_DATA) && (ev->what & (UI_DATA_TIME | UI_DATA_GPS))) {
         display_theme_apply(); // the auto theme: light by day, dark at night
     }
     return (!security_secured() && hotspot_screen_hook(ev)) || cps_screen_hook(ev);

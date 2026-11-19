@@ -38,12 +38,19 @@
 #include "settings.h"
 #include "systime.h"
 #include "datetime.h"
+#include "extra_options.h"
+#include "gps.h"
+#include "position.h"
+#include "timezone_db.h"
 
 #define TIMEZONE_UTC    64
 #define TIMEZONE_STEP_S (15 * 60)
 
 static uint32_t base_seconds = 0; // UTC at base_ms
 static uint32_t base_ms = 0;
+
+extern const uint8_t timezone_data_start[];
+extern const uint8_t timezone_data_end[];
 
 void datetime_init(void)
 {
@@ -54,6 +61,8 @@ void datetime_init(void)
         base_seconds = seconds;
         base_ms = systime_get_ms();
     }
+    timezone_db_init(timezone_data_start,
+                     (uint32_t)((uintptr_t)timezone_data_end - (uintptr_t)timezone_data_start));
 }
 
 uint32_t datetime_now(void)
@@ -78,11 +87,30 @@ bool datetime_shown_is_utc(void)
     return !settings_valid() || ((settings.timezone & 0x80) == 0);
 }
 
+int32_t datetime_local_offset(uint32_t utc)
+{
+    int32_t latitude;
+    int32_t longitude;
+    int32_t offset;
+
+    if (extra_option(EXTRA_OPTION_AUTO_TIMEZONE)) {
+        if (gps_position(&latitude, &longitude)) {
+            if (timezone_db_offset(utc, latitude * 10, longitude * 10, &offset)) {
+                return offset;
+            }
+        } else if (position_own(&latitude, &longitude) &&
+                   timezone_db_offset(utc, latitude, longitude, &offset)) {
+            return offset;
+        }
+    }
+    return ((int32_t)(settings.timezone & 0x7F) - TIMEZONE_UTC) * TIMEZONE_STEP_S;
+}
+
 uint32_t datetime_shown(void)
 {
-    int32_t offset = ((int32_t)(settings.timezone & 0x7F) - TIMEZONE_UTC) * TIMEZONE_STEP_S;
+    uint32_t utc = datetime_now();
 
-    return datetime_now() + (datetime_shown_is_utc() ? 0 : offset);
+    return utc + (datetime_shown_is_utc() ? 0 : datetime_local_offset(utc));
 }
 
 bool datetime_format_local_time(char *buffer, size_t size)

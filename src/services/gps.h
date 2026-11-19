@@ -71,5 +71,6 @@ void gps_start(void);            // the task and UART1; the task switches the mo
 void gps_set_enabled(bool on);   // powers the module and its UART on / off (settings.gps is the caller's)
 void gps_read(gps_data_t *data); // a copy of the last data
 bool gps_has_fix(void);          // the module on and with a fix (the status bar's icon)
+bool gps_position(int32_t *latitude, int32_t *longitude); // current fix in 1/10000 degree
 
 #endif
