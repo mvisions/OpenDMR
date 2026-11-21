@@ -33,8 +33,8 @@
  * left key go to a channel number of the zone, the left key opens the menu, the right key the VFO, the PTT transmits
  * (tx_screen.c). The shortcuts are the ones of keymap.c (OpenGD77: LEFT / RIGHT the TG or the squelch, SK2 + UP / DOWN
  * the zone, # the number entry, * the timeslot ...). The channel shown is the one the radio receives (radio.c), with
- * the timeslot and TG of tx_target.c; the squelch, power, mode and bandwidth changed here last until the channel
- * changes. The screen doesn't tune the radio: it gives its channel (radio_channel()) when the UI task asks, after each
+ * the timeslot and TG of tx_target.c; the squelch and the power changed here are the channel's (written into it at
+ * power off: codeplug_set_channel_squelch()), the mode and bandwidth last until the channel changes. The screen doesn't tune the radio: it gives its channel (radio_channel()) when the UI task asks, after each
  * event (ui_tune()), also while screens without their own channel (the menus) are over it.
  */
 
@@ -443,12 +443,11 @@ static void zone_step(int step)
     }
 }
 
-// increasePowerLevel(), decreasePowerLevel(): the channel's own power, kept in the codeplug. A channel without one
-// (0: written so) starts from the radio's default power and has its own from then on
+// increasePowerLevel(), decreasePowerLevel(): the channel's own power, written into it at power off (codeplug.c). A
+// channel without one (0: written so) starts from the radio's default power and has its own from then on
 static void power_step(int direction, bool to_user)
 {
     int level = (channel.libre_dmr_power != 0) ? (channel.libre_dmr_power - 1) : settings.tx_power_level;
-    codeplug_channel_t stored;
 
     if (to_user) {
         level = POWER_USER;
@@ -457,22 +456,21 @@ static void power_step(int direction, bool to_user)
     }
     if (channel.libre_dmr_power != (uint8_t)(level + 1)) {
         channel.libre_dmr_power = (uint8_t)(level + 1);
-        if ((channel_screen_channel > 0) && codeplug_get_channel(channel_screen_channel, &stored)) {
-            stored.libre_dmr_power = channel.libre_dmr_power; // only the power: other changes here stay passing
-            codeplug_write_channel(channel_screen_channel, &stored);
-        }
+        codeplug_set_channel_power(channel_screen_channel, channel.libre_dmr_power); // only it: others stay passing
     }
     if (level == 0) {
         ui_key_beep(SOUND_KEY_FIRST_ITEM);
     }
 }
 
-// uiChannelMode.c: from the band's default when the channel has none (0)
+// uiChannelMode.c: from the band's default when the channel has none (0); the channel's own from then on, written
+// into it at power off (codeplug.c)
 static void squelch_step(int direction)
 {
     int sql = (channel.sql != 0) ? channel.sql : settings.squelch_defaults[radio_band_of(channel.rx_freq)];
 
     channel.sql = (uint8_t)CLAMP(sql + direction, SQUELCH_MIN, SQUELCH_MAX);
+    codeplug_set_channel_squelch(channel_screen_channel, channel.sql);
     if (channel.sql == SQUELCH_MIN) {
         ui_key_beep(SOUND_KEY_FIRST_ITEM);
     }

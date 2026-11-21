@@ -50,8 +50,9 @@
  * The left and right keys act on their release, and only when their press came to this screen (a list that was left
  * with the press of a key doesn't open the menu here with its release).
  *
- * The VFOs are channels of the codeplug (codeplug_write.c). Changes on this screen are written SAVE_DELAY_MS after
- * the last one, or when the screen is left, so that turning the knob doesn't write the flash at every step.
+ * The VFOs are channels of the codeplug (codeplug_write.c), kept in RAM (vfo_screen_vfo()). Changes on this screen
+ * are written at power off, the one place they are written (vfo_power_off_save()); the channel details and the quick
+ * menu write a VFO at once (vfo_screen_save()).
  */
 
 #include <stdio.h>
@@ -73,6 +74,7 @@
 #include "channel_details.h"
 #include "quick_menu.h"
 #include "vfo_screen.h"
+#include "power.h"
 #include "lock_screen.h"
 #include "radio.h"
 #include "tx_screen.h"
@@ -89,8 +91,6 @@
 #include "dual_watch.h"
 #include "contacts.h"
 #include "aprs.h"
-
-#define SAVE_DELAY_MS 2000
 
 #define FREQ_DIGITS     8 // xxx.xxxxx MHz: the frequency in 10 Hz
 #define FREQ_DOT_AFTER  3
@@ -136,7 +136,7 @@ static codeplug_channel_t radio_ch; // the channel for the radio: the VFO with i
 static tx_target_t target;          // its TG (DMR)
 static bool loaded[2];
 static bool home_is_vfo = false;
-static bool dirty = false;
+static bool dirty[2]; // a VFO changed here, for the power off
 
 static bool editing_tx = false; // the TX frequency was stepped last: shown large, digits enter it
 
@@ -159,10 +159,14 @@ int vfo_screen_current(void)
     return (settings.current_vfo_number == 1) ? 1 : 0;
 }
 
+static void vfo_power_off_save(void);
+static void changed(void);
+
 codeplug_channel_t *vfo_screen_vfo(int vfo)
 {
     vfo = (vfo == 1) ? 1 : 0;
     if (!loaded[vfo]) {
+        power_off_save_register(vfo_power_off_save);
         codeplug_read_vfo(vfo, &vfos[vfo]);
         if (vfos[vfo].libre_dmr_power == 0) {
             vfos[vfo].libre_dmr_power = (uint8_t)(settings.tx_power_level + 1); // its own from the default power on
@@ -172,15 +176,33 @@ codeplug_channel_t *vfo_screen_vfo(int vfo)
     return &vfos[vfo];
 }
 
-void vfo_screen_reload(void)
+// Power To All (codeplug_set_all_power() wrote it in the codeplug): the VFOs in RAM take it too, keeping their other
+// changes for the power off
+void vfo_screen_set_power(uint8_t power)
 {
-    loaded[0] = loaded[1] = false;
-    dirty = false;
+    for (int v = 0; v < 2; v++) {
+        if (loaded[v]) {
+            vfos[v].libre_dmr_power = power;
+        }
+    }
 }
 
 void vfo_screen_save(int vfo)
 {
+    vfo = (vfo == 1) ? 1 : 0;
     codeplug_write_vfo(vfo, vfo_screen_vfo(vfo));
+    dirty[vfo] = false;
+}
+
+// At power off (power_off_save_register()): the VFOs changed here
+static void vfo_power_off_save(void)
+{
+    for (int v = 0; v < 2; v++) {
+        if (dirty[v] && loaded[v]) {
+            dirty[v] = false;
+            codeplug_write_vfo(v, &vfos[v]);
+        }
+    }
 }
 
 static codeplug_channel_t *vfo(void)
@@ -258,8 +280,7 @@ static bool tone_scan_step(void)
     if (radio_audio_heard()) {
         vfo()->tx_tone = vfo()->rx_tone;
         tone_scan.active = false;
-        dirty = true;
-        ui_timer_start(SAVE_DELAY_MS);
+        changed();
         sound_play(SOUND_ACK);
         return true;
     }
@@ -268,18 +289,9 @@ static bool tone_scan_step(void)
     return true;
 }
 
-static void save_if_dirty(void)
-{
-    if (dirty) {
-        dirty = false;
-        vfo_screen_save(vfo_screen_current());
-    }
-}
-
 static void changed(void)
 {
-    dirty = true;
-    ui_timer_start(SAVE_DELAY_MS);
+    dirty[vfo_screen_current()] = true;
 }
 
 static void set_home_mode(bool is_vfo)
@@ -474,7 +486,7 @@ static void scan_begin(int direction)
     editing_tx = false;
     if ((v->rx_freq < low) || (v->rx_freq > high)) {
         v->rx_freq = (direction > 0) ? low : high; // into the range
-        dirty = true;
+        changed();
     }
     scan_start(&scan, scan_dwell(), direction);
 }
@@ -494,14 +506,13 @@ static bool scan_step(void)
         return true;
     }
     vfo()->rx_freq = f;
-    dirty = true;
+    changed();
     scan_moved(&scan, scan_dwell());
     return true;
 }
 
 static void switch_vfo(void)
 {
-    save_if_dirty();
     settings.current_vfo_number = (uint8_t)(1 - vfo_screen_current());
     settings_changed();
     editing_tx = false;
@@ -600,7 +611,6 @@ static void enter(void *arg)
 static void leave(void)
 {
     scan_stop(&scan);
-    save_if_dirty();
     digit_entry_stop(&entry);
 }
 
@@ -760,8 +770,6 @@ static bool handle_event(const ui_event_t *ev)
         case UI_EVENT_KEY_LONG:
         case UI_EVENT_KEY_REPEAT:
         case UI_EVENT_KEY_RELEASE: {
-            bool was_scanning = scan.active;
-
             held = ev->modifiers;
             switch (scan_key(&scan, ev)) {
                 case SCAN_KEY_SKIP:
@@ -774,9 +782,6 @@ static bool handle_event(const ui_event_t *ev)
                 case SCAN_KEY_USED:
                 case SCAN_KEY_STOPPED:
                     (void)keymap_action(ev, KEYMAP_SCREEN_VFO); // keeps the side key state
-                    if (was_scanning && !scan.active) {
-                        ui_timer_start(SAVE_DELAY_MS);
-                    }
                     return true;
                 default:
                     break;
@@ -798,10 +803,11 @@ static bool handle_event(const ui_event_t *ev)
             if (scan.active) {
                 bool redraw = scan_step();
 
-                ui_timer_start(scan.active ? SCAN_TICK_MS : SAVE_DELAY_MS); // stopped: the VFO saved later
+                if (scan.active) {
+                    ui_timer_start(SCAN_TICK_MS);
+                }
                 return redraw;
             }
-            save_if_dirty();
             return false;
         case UI_EVENT_DATA:
             if ((ev->what & UI_DATA_AUTOLOCK) && !lock_screen_is_keypad_locked()) {
@@ -824,8 +830,7 @@ static bool handle(const ui_event_t *ev)
     }
     if (tone_scan.active && ((ev->type == UI_EVENT_KEY_PRESS) || (ev->type == UI_EVENT_ROTARY))) {
         tone_scan.active = false; // a key stops it, on the tone it was at
-        dirty = true;
-        ui_timer_start(SAVE_DELAY_MS);
+        changed();
         if (ev->key != UI_KEY_PTT) {
             return true;
         }
@@ -835,7 +840,6 @@ static bool handle(const ui_event_t *ev)
 
         scan_stop(&scan);
         digit_entry_stop(&entry);
-        save_if_dirty();
         snprintf(name, sizeof(name), "VFO %c", (vfo_screen_current() == 0) ? 'A' : 'B');
         tx_screen_open("VFO", name, &radio_ch);
         return false;

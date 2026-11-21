@@ -269,7 +269,7 @@ static void power_to_all_answered(bool yes)
         return;
     }
     count = codeplug_set_all_power((uint8_t)(settings.tx_power_level + 1));
-    vfo_screen_reload();
+    vfo_screen_set_power((uint8_t)(settings.tx_power_level + 1));
     snprintf(power_line, sizeof(power_line), "%s %d", text(TEXT_POWER_TO_ALL_DONE), (count < 0) ? 0 : count);
     power_result = (message_box_t){.title = text(TEXT_POWER_TO_ALL),
                                    .line1 = (count < 0) ? text(TEXT_ERROR) : power_line,

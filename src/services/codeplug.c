@@ -81,6 +81,20 @@ static int channels_per_zone = 16;
 static int channel_total;
 static uint8_t last_used[LAST_USED_SIZE];
 static bool last_used_changed;
+
+// The squelch and power changed on the channel screen, for the power off (codeplug_set_channel_squelch()); number 0:
+// a free entry. Full (more channels changed than this before a power off): the channel is written at once
+#define CHANGED_MAX 32
+#define CHANGED_SQL   0x01
+#define CHANGED_POWER 0x02
+typedef struct {
+    uint16_t number;
+    uint8_t what; // CHANGED_x
+    uint8_t sql;
+    uint8_t power;
+} changed_t;
+static changed_t changed[CHANGED_MAX];
+static void power_off_save(void);
 static void last_used_save(void);
 
 uint32_t codeplug_bcd_to_int(uint32_t bcd)
@@ -146,7 +160,8 @@ void codeplug_init(void)
         flash_read(ADDR_LAST_USED + 4, last_used, sizeof(last_used));
     }
     last_used_changed = false;
-    power_off_save_register(last_used_save);
+    memset(changed, 0, sizeof(changed));
+    power_off_save_register(power_off_save);
 
     channel_total = 0;
     for (unsigned i = 0; i < sizeof(channels_in_use); i++) {
@@ -418,7 +433,91 @@ bool codeplug_get_channel(int number, codeplug_channel_t *channel)
         return false;
     }
     channel_from_codeplug(channel);
+    taskENTER_CRITICAL();
+    for (int i = 0; i < CHANGED_MAX; i++) {
+        if (changed[i].number == number) {
+            if (changed[i].what & CHANGED_SQL) {
+                channel->sql = changed[i].sql;
+            }
+            if (changed[i].what & CHANGED_POWER) {
+                channel->libre_dmr_power = changed[i].power;
+            }
+        }
+    }
+    taskEXIT_CRITICAL();
     return true;
+}
+
+// The squelch or power of a channel kept for the power off; false: no room left
+static bool keep_changed(int number, uint8_t what, uint8_t value)
+{
+    int at = -1;
+
+    taskENTER_CRITICAL();
+    for (int i = 0; i < CHANGED_MAX; i++) {
+        if ((changed[i].number == number) || ((at < 0) && (changed[i].number == 0))) {
+            at = i;
+            if (changed[i].number == number) {
+                break;
+            }
+        }
+    }
+    if (at >= 0) {
+        if (changed[at].number != number) {
+            changed[at].what = 0;
+        }
+        changed[at].number = (uint16_t)number;
+        changed[at].what |= what;
+        if (what == CHANGED_SQL) {
+            changed[at].sql = value;
+        } else {
+            changed[at].power = value;
+        }
+    }
+    taskEXIT_CRITICAL();
+    return at >= 0;
+}
+
+static void set_changed(int number, uint8_t what, uint8_t value)
+{
+    static codeplug_channel_t c; // not on the UI task stack
+
+    if ((number < CODEPLUG_CHANNELS_MIN) || (number > CODEPLUG_CHANNELS_MAX) || keep_changed(number, what, value) ||
+        !codeplug_get_channel(number, &c)) {
+        return;
+    }
+    // no room: this channel written now
+    if (what == CHANGED_SQL) {
+        c.sql = value;
+    } else {
+        c.libre_dmr_power = value;
+    }
+    codeplug_write_channel(number, &c);
+}
+
+void codeplug_set_channel_squelch(int number, uint8_t sql)
+{
+    set_changed(number, CHANGED_SQL, sql);
+}
+
+void codeplug_set_channel_power(int number, uint8_t power)
+{
+    set_changed(number, CHANGED_POWER, power);
+}
+
+// At power off: the last used table, and the squelch and power changed on the channel screen into their channels
+static void power_off_save(void)
+{
+    static codeplug_channel_t c; // not on the input task stack
+
+    last_used_save();
+    for (int i = 0; i < CHANGED_MAX; i++) {
+        int number = changed[i].number;
+
+        if ((number != 0) && codeplug_get_channel(number, &c)) {
+            codeplug_write_channel(number, &c); // with the change (codeplug_get_channel()), the entry freed
+        }
+    }
 }
 
 /*
@@ -469,6 +568,14 @@ bool codeplug_write_channel(int number, const codeplug_channel_t *channel)
     if ((number < CODEPLUG_CHANNELS_MIN) || (number > CODEPLUG_CHANNELS_MAX)) {
         return false;
     }
+    // written whole: what is written wins over a squelch or power kept for the power off
+    taskENTER_CRITICAL();
+    for (int i = 0; i < CHANGED_MAX; i++) {
+        if (changed[i].number == number) {
+            changed[i].number = 0;
+        }
+    }
+    taskEXIT_CRITICAL();
     channel_to_codeplug(channel, &stored);
     return flash_write(channel_address(number), (const uint8_t *)&stored, CHANNEL_SIZE);
 }
@@ -539,6 +646,14 @@ int codeplug_set_all_power(uint8_t power)
     int count = 0;
     bool ok = true;
 
+    taskENTER_CRITICAL(); // the powers kept for the power off give way to this one
+    for (int i = 0; i < CHANGED_MAX; i++) {
+        changed[i].what &= (uint8_t)~CHANGED_POWER;
+        if (changed[i].what == 0) {
+            changed[i].number = 0;
+        }
+    }
+    taskEXIT_CRITICAL();
     flash_batch_start();
     for (int number = CODEPLUG_CHANNELS_MIN; ok && (number <= CODEPLUG_CHANNELS_MAX); number++) {
         if (codeplug_channel_in_use(number)) {

@@ -257,7 +257,9 @@ comes the target, `ALL`, with the CAN on the right of its line (e.g. `CAN 0`).
   and name, how long ago, and the talk group or `PC` of each call). The caller shows there within about 0.7 s.
   Display options → **Recent callers** turns the block off (it is on by default); FM, AM, USB, LSB and NXDN channels never show it.
 - FM: audio when the squelch opens; ▶ ◀ change the squelch, shown on the screen for a moment. 0 % is always open
-  (the noise is heard); a receive tone still applies.
+  (the noise is heard); a receive tone still applies. The squelch and the power changed on a channel are that
+  channel's own (a VFO's likewise), written into the codeplug at power off; a channel without its own uses the
+  band's default squelch of Radio options.
 
 ---
 

@@ -39,7 +39,7 @@ bool power_off_pending(void);
 void power_off(void); // cuts the power: doesn't return
 
 // Saved before the power goes (the input task, after the settings): a screen keeping its own data registers it
-#define POWER_OFF_SAVERS 4
+#define POWER_OFF_SAVERS 6
 void power_off_save_register(void (*save)(void));
 void power_off_save_all(void);
 
