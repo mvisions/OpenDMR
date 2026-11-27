@@ -91,6 +91,7 @@ typedef enum {
 #define UI_DATA_CPS        0x0040 // cps_screen.c: the CPS opened, rendered or closed its screen, or more data went
 #define UI_DATA_GPS        0x0080 // gps.c: the fix came or went (the status bar's GPS icon)
 #define UI_DATA_SMS        0x0100 // sms.c: a message came, or one sent got its result
+#define UI_DATA_DUAL_WATCH 0x0200 // dual_watch.c: back after the scan that paused it (the home screens show it)
 
 // What a key event comes from, besides a key (0)
 #define UI_KEY_FROM_VOX 0x0001 // radio.c: the VOX's PTT press and release

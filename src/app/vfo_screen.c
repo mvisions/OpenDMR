@@ -849,6 +849,9 @@ static bool handle_event(const ui_event_t *ev)
                 lock_screen_lock(true, true); // the auto lock (keypad and PTT, as the main firmware)
                 return false;
             }
+            if ((ev->what & UI_DATA_DUAL_WATCH) && dual_watch_show()) {
+                return false; // the dual watch back after a scan (dual_watch_scan_ended())
+            }
             return true; // the status bar shows the battery and the time, the S meter the signal
         default:
             return false;

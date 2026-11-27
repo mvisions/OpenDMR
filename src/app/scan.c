@@ -40,6 +40,7 @@
 #include "nxdn_radio.h"
 #include "scan.h"
 #include "custom_data.h"
+#include "dual_watch.h"
 
 #define SETTLE_MS       30   // after a change, before the carrier is believed (SCAN_FREQ_CHANGE_SETTLING_INTERVAL)
 #define SHORT_PAUSE_MS  500  // a carrier: time for the tone or the audio (SCAN_SHORT_PAUSE_TIME)
@@ -142,6 +143,8 @@ void scan_stop(scan_t *scan)
 {
     if (scan->active) {
         radio_set_scanning(false);
+        scan->active = false;
+        dual_watch_scan_ended(); // a dual watch paused by it: back
     }
     scan->active = false;
     scan->star_held = false;

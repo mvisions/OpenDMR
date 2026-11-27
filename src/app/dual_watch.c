@@ -42,8 +42,10 @@
  * this screen (ui_handle_under()): the knob, LEFT / RIGHT, the digits, *, #, SK1 / SK2 with them, the left key (its
  * quick menu, where the dual watch is turned off; held: the main menu), the right key (channel <-> VFO, held: VFO
  * A / B).
- * A scan started there turns the dual watch off, as SK2 + the right key does ("Close" on its soft key while SK2 is
- * held). Off: the home screen is the selected path.
+ * A scan started there pauses the dual watch (the radio has one receiver): the home screen scans, the dual watch is
+ * back when the scan stops (dual_watch_scan_ended(), on the channel it stopped on). The pause is in RAM only: the
+ * option stays on, also over a power off during the scan (#198, #204). SK2 + the right key turns it off ("Close" on
+ * its soft key while SK2 is held). Off: the home screen is the selected path.
  *
  * The PTT: on the path heard last for DW_FOLLOW_MS after its signal (the answer), else on the selected path.
  */
@@ -117,6 +119,7 @@ static uint32_t redraw_ms;
 static bool opening = false;     // turned on: the home screen's channel or VFO becomes the selected path, on top
 static bool transmitted = false; // the transmit screen was pushed: back from it, stay on that path
 static bool sk2_held = false;    // the right soft key says "Close" (SK2 + the right key turns the dual watch off)
+static bool scan_paused = false; // a scan started on the home screen: off until it stops, the option kept on
 // The squelch of each channel path as it was on the home screen (changed with the keys there), kept while the dual
 // watch is on (#175): the home screen forgets its changes when it goes to the other path. A VFO keeps its own
 static struct {
@@ -126,11 +129,12 @@ static struct {
 
 bool dual_watch_is_on(void)
 {
-    return (settings.bitfield_options & BIT_DUAL_WATCH) != 0;
+    return ((settings.bitfield_options & BIT_DUAL_WATCH) != 0) && !scan_paused;
 }
 
 void dual_watch_set(bool on)
 {
+    scan_paused = false; // turned on or off (the quick menu) during a scan: as asked
     opening = on && !dual_watch_is_on();
     if (on != dual_watch_is_on()) {
         memset(kept, 0, sizeof(kept)); // on or off: the channels' squelch as they have it
@@ -138,6 +142,19 @@ void dual_watch_set(bool on)
     settings_set_option(BIT_DUAL_WATCH, on);
     settings_changed(); // kept over power off (#176)
     settings_save_if_changed();
+}
+
+void dual_watch_scan_ended(void)
+{
+    ui_event_t ev = {.type = UI_EVENT_DATA, .what = UI_DATA_DUAL_WATCH};
+
+    if (!scan_paused) {
+        return;
+    }
+    scan_paused = false;
+    // shown by the home screen when on top, after this event (scan_stop() may run in its leave(), during a push);
+    // another screen on top (a menu): the home screen's enter shows it when that one is gone
+    (void)ui_post(&ev);
 }
 
 bool dual_watch_show(void)
@@ -412,11 +429,11 @@ static void resume(void)
     ui_timer_start(DW_TICK_MS);
 }
 
-// Kept on top after the home screen took a key: not when it started a scan (the dual watch ends: the scan is theirs)
+// Kept on top after the home screen took a key: not when it started a scan (paused until it stops: the scan is theirs)
 static bool keep(void)
 {
-    if (channel_screen_scanning() || vfo_screen_scanning()) {
-        dual_watch_set(false);
+    if ((channel_screen_scanning() || vfo_screen_scanning()) && dual_watch_is_on()) {
+        scan_paused = true;
     }
     return dual_watch_is_on();
 }

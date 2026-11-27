@@ -39,5 +39,6 @@ extern const ui_screen_t dual_watch_screen;
 bool dual_watch_is_on(void);
 void dual_watch_set(bool on);
 bool dual_watch_show(void); // from the enter of the channel / VFO screen: pushed when on; true: pushed
+void dual_watch_scan_ended(void); // scan_stop(): the dual watch paused by the scan is back
 
 #endif
